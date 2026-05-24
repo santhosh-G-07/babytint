@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+frontend/node_modules/
+
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+
+# local env secrets
+.env
+*.env.local
+backend/.env
+frontend/.env.local
+
+# local runtime files
+.logs/
+.run/
+
+# local databases and storage
+backend/*.db
+backend/local_storage/
+backend/__tmp_test.db
+
+# build artifacts
+frontend/.next/
+frontend/out/
+
+# local transfer/import folders
+new version/

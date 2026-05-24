@@ -1,0 +1,84 @@
+"use client";
+
+import Link from "next/link";
+import { ShoppingBag, Trash2 } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
+import { useCartStore } from "@/lib/store";
+import { inr } from "@/lib/utils";
+
+export function CartDrawer() {
+  const { cart, removeFromCart, subtotal } = useCartStore();
+
+  return (
+    <Sheet>
+      <SheetTrigger asChild>
+        <Button variant="outline" className="relative">
+          <ShoppingBag className="mr-2 h-4 w-4" />
+          Cart
+          <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-stone-900 px-1.5 text-xs text-white dark:bg-stone-100 dark:text-stone-900">
+            {cart.length}
+          </span>
+        </Button>
+      </SheetTrigger>
+      <SheetContent>
+        <SheetHeader>
+          <SheetTitle>Your Cart</SheetTitle>
+          <SheetDescription>Review custom frames before checkout.</SheetDescription>
+        </SheetHeader>
+        <div className="mt-6 flex h-[calc(100vh-12rem)] flex-col">
+          <div className="flex-1 space-y-4 overflow-auto pr-2">
+            {cart.length === 0 ? (
+              <p className="text-sm text-stone-500 dark:text-stone-400">Your cart is empty.</p>
+            ) : null}
+            {cart.map((item) => (
+              <div key={item.id} className="rounded-xl border border-stone-200 p-4 dark:border-stone-800">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-medium">{item.frame.name}</p>
+                    <p className="text-sm text-stone-500 dark:text-stone-400">
+                      Qty {item.quantity} • {inr(item.price)}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeFromCart(item.id)}
+                    aria-label="Remove from cart"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <Separator className="my-4" />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-stone-500 dark:text-stone-400">Subtotal</span>
+              <span className="text-lg font-semibold">{inr(subtotal())}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Button variant="outline" asChild>
+                <Link href="/cart">View Cart</Link>
+              </Button>
+              <Button asChild>
+                <Link href="/checkout">Checkout</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
