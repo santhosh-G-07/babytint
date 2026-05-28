@@ -4,18 +4,48 @@ const TRANSPARENT_ALPHA_THRESHOLD = 245;
 const TRANSPARENT_RATIO_FOR_FRAME_HOLE = 0.15;
 const SAMPLE_SIZE = 120;
 
+const defaultFreePoints = [
+  { x: 0.08, y: 0.08 },
+  { x: 0.92, y: 0.04 },
+  { x: 0.98, y: 0.76 },
+  { x: 0.66, y: 0.98 },
+  { x: 0.08, y: 0.9 },
+  { x: 0.02, y: 0.3 },
+];
+const defaultDiamondPoints = [
+  { x: 0.5, y: 0.02 },
+  { x: 0.98, y: 0.5 },
+  { x: 0.5, y: 0.98 },
+  { x: 0.02, y: 0.5 },
+];
+const defaultHexagonPoints = [
+  { x: 0.25, y: 0.02 },
+  { x: 0.75, y: 0.02 },
+  { x: 0.98, y: 0.5 },
+  { x: 0.75, y: 0.98 },
+  { x: 0.25, y: 0.98 },
+  { x: 0.02, y: 0.5 },
+];
+
+function isPolygonShape(shape: SlotPosition["shape"]) {
+  return shape === "free" || shape === "diamond" || shape === "hexagon";
+}
+
+function defaultPointsForShape(shape: SlotPosition["shape"]) {
+  if (shape === "diamond") {
+    return defaultDiamondPoints;
+  }
+  if (shape === "hexagon") {
+    return defaultHexagonPoints;
+  }
+  return defaultFreePoints;
+}
+
 function slotPoints(slot: SlotPosition) {
   if (slot.points && slot.points.length >= 3) {
     return slot.points;
   }
-  return [
-    { x: 0.08, y: 0.08 },
-    { x: 0.92, y: 0.04 },
-    { x: 0.98, y: 0.76 },
-    { x: 0.66, y: 0.98 },
-    { x: 0.08, y: 0.9 },
-    { x: 0.02, y: 0.3 },
-  ];
+  return defaultPointsForShape(slot.shape);
 }
 
 function pointInSlotShape(slot: SlotPosition, x: number, y: number) {
@@ -25,7 +55,7 @@ function pointInSlotShape(slot: SlotPosition, x: number, y: number) {
     return dx * dx + dy * dy <= 0.25;
   }
 
-  if (slot.shape === "free") {
+  if (isPolygonShape(slot.shape)) {
     const points = slotPoints(slot);
     let inside = false;
     for (let i = 0, j = points.length - 1; i < points.length; j = i, i += 1) {

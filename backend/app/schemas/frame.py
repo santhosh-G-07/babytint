@@ -35,6 +35,10 @@ class TextPosition(BaseModel):
     font_weight: str = "normal"
     font_size: float = Field(default=72, gt=0)
     color: str = "#1c1917"
+    gradient_enabled: bool = False
+    gradient_from: str | None = None
+    gradient_to: str | None = None
+    gradient_angle: float = 0.0
     align: str = "center"
     allow_customer_font: bool = True
 

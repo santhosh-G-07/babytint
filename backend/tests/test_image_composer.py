@@ -110,6 +110,88 @@ def test_compose_print_png_supports_free_shape_and_text(monkeypatch):
     assert output.getpixel((240, 230))[3] == 0
 
 
+def test_compose_print_png_supports_gradient_text(monkeypatch):
+    frame_image = Image.new("RGBA", (500, 300), (255, 255, 255, 0))
+    source_image = Image.new("RGBA", (300, 300), (180, 180, 180, 255))
+
+    def fake_open_image(url: str):
+        if "frame" in url:
+            return frame_image.copy()
+        return source_image.copy()
+
+    monkeypatch.setattr(image_composer, "_open_image_from_url", fake_open_image)
+
+    result = image_composer.compose_print_png(
+        frame_asset_url="https://example.com/frame.png",
+        slot_positions=[],
+        text_positions=[
+            {
+                "text_id": 7,
+                "x": 40,
+                "y": 90,
+                "width": 420,
+                "height": 120,
+                "font_family": "Arial",
+                "font_weight": "normal",
+                "font_size": 86,
+                "color": "#111111",
+                "gradient_enabled": True,
+                "gradient_from": "#ff0000",
+                "gradient_to": "#0000ff",
+                "gradient_angle": 0,
+                "align": "center",
+            }
+        ],
+        customization_data={
+            "slots": [],
+            "texts": [{"text_id": 7, "value": "A B", "font_family": "Arial", "font_weight": "normal"}],
+        },
+    )
+
+    output = Image.open(io.BytesIO(result)).convert("RGBA")
+    text_crop = output.crop((40, 90, 460, 210))
+    visible_pixels = [pixel for pixel in text_crop.getdata() if pixel[3] > 0]
+
+    assert visible_pixels
+    red_values = [pixel[0] for pixel in visible_pixels]
+    blue_values = [pixel[2] for pixel in visible_pixels]
+    assert max(red_values) - min(red_values) > 35
+    assert max(blue_values) - min(blue_values) > 35
+
+
+def test_compose_print_png_supports_diamond_shape_without_custom_points(monkeypatch):
+    frame_image = Image.new("RGBA", (320, 320), (255, 255, 255, 0))
+    source_image = Image.new("RGBA", (500, 500), (35, 140, 220, 255))
+
+    def fake_open_image(url: str):
+        if "frame" in url:
+            return frame_image.copy()
+        return source_image.copy()
+
+    monkeypatch.setattr(image_composer, "_open_image_from_url", fake_open_image)
+
+    result = image_composer.compose_print_png(
+        frame_asset_url="https://example.com/frame.png",
+        slot_positions=[
+            {"slot_id": 1, "x": 60, "y": 60, "width": 200, "height": 200, "shape": "diamond"}
+        ],
+        customization_data={
+            "slots": [
+                {
+                    "slot_id": 1,
+                    "image_url": "https://example.com/source.png",
+                    "adjustments": {},
+                }
+            ]
+        },
+    )
+
+    output = Image.open(io.BytesIO(result)).convert("RGBA")
+
+    assert output.getpixel((160, 160))[3] > 0
+    assert output.getpixel((65, 65))[3] == 0
+
+
 def test_compose_print_png_renders_photo_above_opaque_frame_slot(monkeypatch):
     frame_image = Image.new("RGBA", (400, 300), (255, 255, 255, 255))
     source_image = Image.new("RGBA", (400, 400), (10, 120, 220, 255))

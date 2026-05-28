@@ -9,18 +9,48 @@ import { fontStack } from "@/lib/frame-fonts";
 import { shouldRenderSlotAboveFrame } from "@/lib/frame-slot-layer";
 import type { EditorSlotState, EditorTextState, FrameTemplate, SlotAdjustments, SlotPosition, TextPosition } from "@/types";
 
+const defaultFreePoints = [
+  { x: 0.08, y: 0.08 },
+  { x: 0.92, y: 0.04 },
+  { x: 0.98, y: 0.76 },
+  { x: 0.66, y: 0.98 },
+  { x: 0.08, y: 0.9 },
+  { x: 0.02, y: 0.3 },
+];
+const defaultDiamondPoints = [
+  { x: 0.5, y: 0.02 },
+  { x: 0.98, y: 0.5 },
+  { x: 0.5, y: 0.98 },
+  { x: 0.02, y: 0.5 },
+];
+const defaultHexagonPoints = [
+  { x: 0.25, y: 0.02 },
+  { x: 0.75, y: 0.02 },
+  { x: 0.98, y: 0.5 },
+  { x: 0.75, y: 0.98 },
+  { x: 0.25, y: 0.98 },
+  { x: 0.02, y: 0.5 },
+];
+
+function isPolygonShape(shape: SlotPosition["shape"]) {
+  return shape === "free" || shape === "diamond" || shape === "hexagon";
+}
+
+function defaultPointsForShape(shape: SlotPosition["shape"]) {
+  if (shape === "diamond") {
+    return defaultDiamondPoints;
+  }
+  if (shape === "hexagon") {
+    return defaultHexagonPoints;
+  }
+  return defaultFreePoints;
+}
+
 function normalizedPoints(slot: SlotPosition) {
   if (slot.points && slot.points.length >= 3) {
     return slot.points;
   }
-  return [
-    { x: 0.08, y: 0.08 },
-    { x: 0.92, y: 0.04 },
-    { x: 0.98, y: 0.76 },
-    { x: 0.66, y: 0.98 },
-    { x: 0.08, y: 0.9 },
-    { x: 0.02, y: 0.3 },
-  ];
+  return defaultPointsForShape(slot.shape);
 }
 
 function polygonPoints(slot: SlotPosition) {
@@ -38,7 +68,7 @@ function slotClipPath(ctx: Konva.Context, slot: SlotPosition) {
     ctx.closePath();
     return;
   }
-  if (slot.shape === "free") {
+  if (isPolygonShape(slot.shape)) {
     const points = normalizedPoints(slot);
     ctx.beginPath();
     ctx.moveTo(slot.x + points[0].x * slot.width, slot.y + points[0].y * slot.height);
@@ -62,6 +92,30 @@ function normalizedAdjustment(adjustments: SlotAdjustments) {
   };
 }
 
+function gradientPoints(width: number, height: number, angle: number) {
+  const radians = (angle * Math.PI) / 180;
+  const radius = Math.max(1, Math.hypot(width, height) / 2);
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const dx = Math.cos(radians) * radius;
+  const dy = Math.sin(radians) * radius;
+  return {
+    start: { x: centerX - dx, y: centerY - dy },
+    end: { x: centerX + dx, y: centerY + dy },
+  };
+}
+
+function textGradient(field: TextPosition) {
+  if (!field.gradient_enabled || !field.gradient_from || !field.gradient_to) {
+    return null;
+  }
+  const angle = Number.isFinite(field.gradient_angle) ? Number(field.gradient_angle) : 0;
+  return {
+    ...gradientPoints(field.width, field.height, angle),
+    colorStops: [0, field.gradient_from, 1, field.gradient_to],
+  };
+}
+
 function isPointInSlot(x: number, y: number, slot: SlotPosition) {
   if (slot.shape === "circle") {
     const cx = slot.x + slot.width / 2;
@@ -71,7 +125,7 @@ function isPointInSlot(x: number, y: number, slot: SlotPosition) {
     const dy = y - cy;
     return dx * dx + dy * dy <= radius * radius;
   }
-  if (slot.shape === "free") {
+  if (isPolygonShape(slot.shape)) {
     const points = normalizedPoints(slot).map((point) => ({
       x: slot.x + point.x * slot.width,
       y: slot.y + point.y * slot.height,
@@ -103,6 +157,7 @@ function TextLayer({
         const state = textState[field.text_id];
         const value = state?.value || field.default_text || "";
         const fontWeight = state?.font_weight ?? field.font_weight;
+        const gradient = textGradient(field);
         if (!value.trim()) {
           return null;
         }
@@ -118,6 +173,10 @@ function TextLayer({
             fontFamily={fontStack(state?.font_family ?? field.font_family)}
             fontStyle={fontWeight === "bold" ? "bold" : "normal"}
             fill={field.color}
+            fillPriority={gradient ? "linear-gradient" : "color"}
+            fillLinearGradientStartPoint={gradient?.start}
+            fillLinearGradientEndPoint={gradient?.end}
+            fillLinearGradientColorStops={gradient?.colorStops}
             align={field.align}
             verticalAlign="middle"
             listening={false}
@@ -131,7 +190,6 @@ function TextLayer({
 function SlotImage({
   slot,
   slotState,
-  isSelected,
   onSelect,
   onAdjustmentChange,
   onDragEnd,
@@ -139,7 +197,6 @@ function SlotImage({
 }: {
   slot: SlotPosition;
   slotState: EditorSlotState;
-  isSelected: boolean;
   onSelect: () => void;
   onAdjustmentChange: (patch: Partial<SlotAdjustments>) => void;
   onDragStart: () => void;
@@ -217,9 +274,6 @@ function SlotImage({
             }
           : undefined
       }
-      shadowColor={isSelected ? "#b45309" : "transparent"}
-      shadowBlur={isSelected ? 16 : 0}
-      shadowOpacity={0.4}
     />
   );
 }
@@ -324,7 +378,6 @@ export function FrameCanvas({
                   <SlotImage
                     slot={slot}
                     slotState={state}
-                    isSelected={selectedSlotId === slot.slot_id}
                     onSelect={() => onSelectSlot(slot.slot_id)}
                     onAdjustmentChange={(patch) => onAdjustmentsChange(slot.slot_id, patch)}
                     onDragStart={() => setDragSourceSlot(slot.slot_id)}
@@ -371,7 +424,6 @@ export function FrameCanvas({
                   <SlotImage
                     slot={slot}
                     slotState={state}
-                    isSelected={selectedSlotId === slot.slot_id}
                     onSelect={() => onSelectSlot(slot.slot_id)}
                     onAdjustmentChange={(patch) => onAdjustmentsChange(slot.slot_id, patch)}
                     onDragStart={() => setDragSourceSlot(slot.slot_id)}
@@ -413,16 +465,16 @@ export function FrameCanvas({
                       x={slot.x + slot.width / 2}
                       y={slot.y + slot.height / 2}
                       radius={Math.min(slot.width, slot.height) / 2}
-                      fill={selectedSlotId === slot.slot_id ? "rgba(245, 158, 11, 0.16)" : "rgba(0, 0, 0, 0.04)"}
+                      fill="rgba(0, 0, 0, 0)"
                       stroke={selectedSlotId === slot.slot_id ? "#d97706" : "#a8a29e"}
                       strokeWidth={selectedSlotId === slot.slot_id ? 4 : 2}
                       dash={selectedSlotId === slot.slot_id ? [] : [8, 8]}
                     />
-                  ) : slot.shape === "free" ? (
+                  ) : isPolygonShape(slot.shape) ? (
                     <Line
                       points={polygonPoints(slot)}
                       closed
-                      fill={selectedSlotId === slot.slot_id ? "rgba(245, 158, 11, 0.16)" : "rgba(0, 0, 0, 0.04)"}
+                      fill="rgba(0, 0, 0, 0)"
                       stroke={selectedSlotId === slot.slot_id ? "#d97706" : "#a8a29e"}
                       strokeWidth={selectedSlotId === slot.slot_id ? 4 : 2}
                       dash={selectedSlotId === slot.slot_id ? [] : [8, 8]}
@@ -433,7 +485,7 @@ export function FrameCanvas({
                       y={slot.y}
                       width={slot.width}
                       height={slot.height}
-                      fill={selectedSlotId === slot.slot_id ? "rgba(245, 158, 11, 0.16)" : "rgba(0, 0, 0, 0.04)"}
+                      fill="rgba(0, 0, 0, 0)"
                       stroke={selectedSlotId === slot.slot_id ? "#d97706" : "#a8a29e"}
                       strokeWidth={selectedSlotId === slot.slot_id ? 4 : 2}
                       dash={selectedSlotId === slot.slot_id ? [] : [8, 8]}

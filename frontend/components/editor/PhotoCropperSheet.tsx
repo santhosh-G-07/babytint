@@ -24,6 +24,29 @@ interface Offset {
   y: number;
 }
 
+const defaultFreePoints = [
+  { x: 0.08, y: 0.08 },
+  { x: 0.92, y: 0.04 },
+  { x: 0.98, y: 0.76 },
+  { x: 0.66, y: 0.98 },
+  { x: 0.08, y: 0.9 },
+  { x: 0.02, y: 0.3 },
+];
+const defaultDiamondPoints = [
+  { x: 0.5, y: 0.02 },
+  { x: 0.98, y: 0.5 },
+  { x: 0.5, y: 0.98 },
+  { x: 0.02, y: 0.5 },
+];
+const defaultHexagonPoints = [
+  { x: 0.25, y: 0.02 },
+  { x: 0.75, y: 0.02 },
+  { x: 0.98, y: 0.5 },
+  { x: 0.75, y: 0.98 },
+  { x: 0.25, y: 0.98 },
+  { x: 0.02, y: 0.5 },
+];
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -38,18 +61,26 @@ function geometry(container: Size, natural: Size, zoom: number) {
   };
 }
 
+function isPolygonShape(shape: SlotPosition["shape"]) {
+  return shape === "free" || shape === "diamond" || shape === "hexagon";
+}
+
+function slotPolygonPoints(slot: SlotPosition) {
+  if (slot.points && slot.points.length >= 3) {
+    return slot.points;
+  }
+  if (slot.shape === "diamond") {
+    return defaultDiamondPoints;
+  }
+  if (slot.shape === "hexagon") {
+    return defaultHexagonPoints;
+  }
+  return defaultFreePoints;
+}
+
 function freeShapeClipPath(slot: SlotPosition) {
   const points =
-    slot.points && slot.points.length >= 3
-      ? slot.points
-      : [
-          { x: 0.08, y: 0.08 },
-          { x: 0.92, y: 0.04 },
-          { x: 0.98, y: 0.76 },
-          { x: 0.66, y: 0.98 },
-          { x: 0.08, y: 0.9 },
-          { x: 0.02, y: 0.3 },
-        ];
+    slotPolygonPoints(slot);
   return `polygon(${points.map((point) => `${point.x * 100}% ${point.y * 100}%`).join(", ")})`;
 }
 
@@ -81,7 +112,7 @@ export function PhotoCropperSheet({
 
   const slotTitle = slot.label?.trim() || `Slot ${slot.slot_id}`;
   const isCircle = slot.shape === "circle";
-  const slotClipPath = slot.shape === "free" ? freeShapeClipPath(slot) : undefined;
+  const slotClipPath = isPolygonShape(slot.shape) ? freeShapeClipPath(slot) : undefined;
   const fallbackFrameSize = useMemo(
     () => ({
       width: Math.max(...frame.slot_positions.map((item) => item.x + item.width), 1200),

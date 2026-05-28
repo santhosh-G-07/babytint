@@ -10,7 +10,7 @@ export interface SlotPosition {
   y: number;
   width: number;
   height: number;
-  shape: "rect" | "circle" | "free";
+  shape: "rect" | "circle" | "free" | "diamond" | "hexagon";
   label?: string | null;
   points?: Array<{ x: number; y: number }> | null;
 }
@@ -33,6 +33,10 @@ export interface TextPosition {
   font_weight: TextWeight;
   font_size: number;
   color: string;
+  gradient_enabled?: boolean;
+  gradient_from?: string;
+  gradient_to?: string;
+  gradient_angle?: number;
   align: TextAlign;
   allow_customer_font?: boolean;
 }

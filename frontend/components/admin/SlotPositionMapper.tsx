@@ -28,6 +28,7 @@ import { fontOptionValue, fontStack, frameFontGroups, parseFontOption } from "@/
 import type { SlotPosition, TextAlign, TextFontGroup, TextPosition } from "@/types";
 
 type Selection = { type: "slot"; id: number } | { type: "text"; id: number } | null;
+type FencePoint = { x: number; y: number };
 
 const defaultFreePoints = [
   { x: 0.08, y: 0.08 },
@@ -36,6 +37,20 @@ const defaultFreePoints = [
   { x: 0.66, y: 0.98 },
   { x: 0.08, y: 0.9 },
   { x: 0.02, y: 0.3 },
+];
+const defaultDiamondPoints = [
+  { x: 0.5, y: 0.02 },
+  { x: 0.98, y: 0.5 },
+  { x: 0.5, y: 0.98 },
+  { x: 0.02, y: 0.5 },
+];
+const defaultHexagonPoints = [
+  { x: 0.25, y: 0.02 },
+  { x: 0.75, y: 0.02 },
+  { x: 0.98, y: 0.5 },
+  { x: 0.75, y: 0.98 },
+  { x: 0.25, y: 0.98 },
+  { x: 0.02, y: 0.5 },
 ];
 
 function nextSlotId(slots: SlotPosition[]) {
@@ -50,8 +65,46 @@ function clamp(value: number, min = 0, max = 1) {
   return Math.min(max, Math.max(min, value));
 }
 
+function gradientPoints(width: number, height: number, angle: number) {
+  const radians = (angle * Math.PI) / 180;
+  const radius = Math.max(1, Math.hypot(width, height) / 2);
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const dx = Math.cos(radians) * radius;
+  const dy = Math.sin(radians) * radius;
+  return {
+    start: { x: centerX - dx, y: centerY - dy },
+    end: { x: centerX + dx, y: centerY + dy },
+  };
+}
+
+function textGradient(field: TextPosition) {
+  if (!field.gradient_enabled || !field.gradient_from || !field.gradient_to) {
+    return null;
+  }
+  const angle = Number.isFinite(field.gradient_angle) ? Number(field.gradient_angle) : 0;
+  return {
+    ...gradientPoints(field.width, field.height, angle),
+    colorStops: [0, field.gradient_from, 1, field.gradient_to],
+  };
+}
+
+function isPolygonShape(shape: SlotPosition["shape"]) {
+  return shape === "free" || shape === "diamond" || shape === "hexagon";
+}
+
+function defaultPointsForShape(shape: SlotPosition["shape"]) {
+  if (shape === "diamond") {
+    return defaultDiamondPoints;
+  }
+  if (shape === "hexagon") {
+    return defaultHexagonPoints;
+  }
+  return defaultFreePoints;
+}
+
 function pointsForSlot(slot: SlotPosition) {
-  return slot.points && slot.points.length >= 3 ? slot.points : defaultFreePoints;
+  return slot.points && slot.points.length >= 3 ? slot.points : defaultPointsForShape(slot.shape);
 }
 
 function linePoints(slot: SlotPosition) {
@@ -70,6 +123,35 @@ function selectedExists(selection: Selection, slots: SlotPosition[], textPositio
     : textPositions.some((field) => field.text_id === selection.id);
 }
 
+function buildFreeSlotFromFence(slotId: number, fence: FencePoint[]): SlotPosition | null {
+  if (fence.length < 3) {
+    return null;
+  }
+
+  const xs = fence.map((point) => point.x);
+  const ys = fence.map((point) => point.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const width = Math.max(24, maxX - minX);
+  const height = Math.max(24, maxY - minY);
+
+  return {
+    slot_id: slotId,
+    x: minX,
+    y: minY,
+    width,
+    height,
+    shape: "free",
+    label: `Slot ${slotId}`,
+    points: fence.map((point) => ({
+      x: clamp((point.x - minX) / width),
+      y: clamp((point.y - minY) / height),
+    })),
+  };
+}
+
 export function SlotPositionMapper({
   frameAssetUrl,
   slots,
@@ -85,6 +167,10 @@ export function SlotPositionMapper({
 }) {
   const [selection, setSelection] = useState<Selection>(slots[0] ? { type: "slot", id: slots[0].slot_id } : null);
   const [containerWidth, setContainerWidth] = useState(720);
+  const [showAddSlotPrompt, setShowAddSlotPrompt] = useState(false);
+  const [isDrawingFence, setIsDrawingFence] = useState(false);
+  const [fencePoints, setFencePoints] = useState<FencePoint[]>([]);
+  const [fencePointer, setFencePointer] = useState<FencePoint | null>(null);
   const [image] = useImage(frameAssetUrl || "", "anonymous");
   const wrapperRef = useRef<HTMLDivElement>(null);
   const trRef = useRef<Konva.Transformer>(null);
@@ -150,6 +236,10 @@ export function SlotPositionMapper({
   const stageWidth = Math.max(320, Math.min(containerWidth || 720, 720));
   const scale = stageWidth / stageBounds.width;
   const stageHeight = Math.max(260, stageBounds.height * scale);
+  const fencePreviewPoints = useMemo(
+    () => (fencePointer ? [...fencePoints, fencePointer] : fencePoints),
+    [fencePoints, fencePointer],
+  );
 
   const updateSlot = (slotId: number, patch: Partial<SlotPosition>) => {
     onChange(slots.map((slot) => (slot.slot_id === slotId ? { ...slot, ...patch } : slot)));
@@ -163,26 +253,92 @@ export function SlotPositionMapper({
     ? slots.find((slot) => slot.slot_id === effectiveSelection.id)
     : null;
 
+  const createRectSlot = () => {
+    const slotId = nextSlotId(slots);
+    const created: SlotPosition = {
+      slot_id: slotId,
+      x: 120,
+      y: 80,
+      width: 260,
+      height: 220,
+      shape: "rect",
+      label: `Slot ${slotId}`,
+    };
+    onChange([...slots, created]);
+    setSelection({ type: "slot", id: slotId });
+    setShowAddSlotPrompt(false);
+  };
+
+  const startFenceDraw = () => {
+    setShowAddSlotPrompt(false);
+    setIsDrawingFence(true);
+    setFencePoints([]);
+    setFencePointer(null);
+    setSelection(null);
+  };
+
+  const cancelFenceDraw = () => {
+    setIsDrawingFence(false);
+    setFencePoints([]);
+    setFencePointer(null);
+  };
+
+  const finalizeFenceDraw = () => {
+    const slotId = nextSlotId(slots);
+    const created = buildFreeSlotFromFence(slotId, fencePoints);
+    if (!created) {
+      return;
+    }
+    onChange([...slots, created]);
+    setSelection({ type: "slot", id: slotId });
+    cancelFenceDraw();
+  };
+
+  const pointerFromStage = (stage: Konva.Stage): FencePoint | null => {
+    const pointer = stage.getPointerPosition();
+    if (!pointer) {
+      return null;
+    }
+    return {
+      x: clamp(pointer.x / scale, 0, stageBounds.width),
+      y: clamp(pointer.y / scale, 0, stageBounds.height),
+    };
+  };
+
+  const handleFencePointerDown = (event: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+    if (!isDrawingFence) {
+      return;
+    }
+    const stage = event.target.getStage();
+    if (!stage) {
+      return;
+    }
+    const point = pointerFromStage(stage);
+    if (!point) {
+      return;
+    }
+    setFencePoints((previous) => [...previous, point]);
+    event.cancelBubble = true;
+  };
+
+  const handleFencePointerMove = (event: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+    if (!isDrawingFence) {
+      return;
+    }
+    const stage = event.target.getStage();
+    if (!stage) {
+      return;
+    }
+    setFencePointer(pointerFromStage(stage));
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Button
           size="sm"
           variant="outline"
-          onClick={() => {
-            const slotId = nextSlotId(slots);
-            const created: SlotPosition = {
-              slot_id: slotId,
-              x: 120,
-              y: 80,
-              width: 260,
-              height: 220,
-              shape: "rect",
-              label: `Slot ${slotId}`,
-            };
-            onChange([...slots, created]);
-            setSelection({ type: "slot", id: slotId });
-          }}
+          onClick={() => setShowAddSlotPrompt((current) => !current)}
         >
           <ImageIcon className="mr-2 h-4 w-4" />
           Add Slot
@@ -206,6 +362,10 @@ export function SlotPositionMapper({
               font_weight: "normal",
               font_size: 82,
               color: "#1c1917",
+              gradient_enabled: false,
+              gradient_from: "#1c1917",
+              gradient_to: "#92400e",
+              gradient_angle: 0,
               align: "center",
               allow_customer_font: true,
             };
@@ -237,8 +397,69 @@ export function SlotPositionMapper({
         </Button>
       </div>
 
+      {showAddSlotPrompt ? (
+        <div className="rounded-lg border border-stone-200 bg-white p-3 text-sm dark:border-stone-800 dark:bg-stone-900">
+          <p className="text-stone-700 dark:text-stone-200">Free shape slot?</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={createRectSlot}>
+              No, regular slot
+            </Button>
+            <Button size="sm" onClick={startFenceDraw}>
+              Yes, draw fence
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setShowAddSlotPrompt(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {isDrawingFence ? (
+        <div className="rounded-lg border border-amber-300 bg-amber-50/70 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
+          <p>Fence draw mode: click on the canvas to place points around your shape.</p>
+          <p className="mt-1 text-xs opacity-90">Add at least 3 points, then finalize.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={fencePoints.length === 0}
+              onClick={() => setFencePoints((previous) => previous.slice(0, -1))}
+            >
+              Undo Point
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={fencePoints.length === 0}
+              onClick={() => setFencePoints([])}
+            >
+              Clear
+            </Button>
+            <Button
+              size="sm"
+              disabled={fencePoints.length < 3}
+              onClick={finalizeFenceDraw}
+            >
+              Finalize Free Shape
+            </Button>
+            <Button size="sm" variant="ghost" onClick={cancelFenceDraw}>
+              Cancel Drawing
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <div ref={wrapperRef} className="overflow-auto rounded-xl border border-stone-200 bg-stone-50 p-2 dark:border-stone-800 dark:bg-stone-950/50">
-        <Stage width={stageWidth} height={stageHeight}>
+        <Stage
+          width={stageWidth}
+          height={stageHeight}
+          onMouseDown={handleFencePointerDown}
+          onTouchStart={handleFencePointerDown}
+          onMouseMove={handleFencePointerMove}
+          onTouchMove={handleFencePointerMove}
+          onMouseLeave={() => setFencePointer(null)}
+          onTouchEnd={() => setFencePointer(null)}
+        >
           <Layer scaleX={scale} scaleY={scale}>
             <Rect x={0} y={0} width={stageBounds.width} height={stageBounds.height} fill="#e7e5e4" />
             {image ? (
@@ -250,6 +471,34 @@ export function SlotPositionMapper({
                 height={stageBounds.height}
                 listening={false}
               />
+            ) : null}
+
+            {isDrawingFence ? (
+              <>
+                {fencePreviewPoints.length >= 2 ? (
+                  <Line
+                    points={fencePreviewPoints.flatMap((point) => [point.x, point.y])}
+                    closed={!fencePointer && fencePoints.length >= 3}
+                    stroke="#d97706"
+                    strokeWidth={3}
+                    dash={[8, 6]}
+                    fill={fencePoints.length >= 3 ? "rgba(245, 158, 11, 0.15)" : "rgba(245, 158, 11, 0.08)"}
+                    listening={false}
+                  />
+                ) : null}
+                {fencePoints.map((point, index) => (
+                  <Circle
+                    key={`fence-point-${index}`}
+                    x={point.x}
+                    y={point.y}
+                    radius={9}
+                    fill="#f59e0b"
+                    stroke="#ffffff"
+                    strokeWidth={2}
+                    listening={false}
+                  />
+                ))}
+              </>
             ) : null}
 
             {slots.map((slot) => {
@@ -269,7 +518,7 @@ export function SlotPositionMapper({
                     stroke={selected ? "#d97706" : "#334155"}
                     strokeWidth={selected ? 3 : 2}
                     dash={selected ? [] : [8, 6]}
-                    opacity={slot.shape === "free" ? 0.3 : 1}
+                    opacity={isPolygonShape(slot.shape) ? 0.3 : 1}
                     draggable
                     onClick={() => setSelection({ type: "slot", id: slot.slot_id })}
                     onTap={() => setSelection({ type: "slot", id: slot.slot_id })}
@@ -290,7 +539,7 @@ export function SlotPositionMapper({
                       updateSlot(slot.slot_id, { x, y, width, height });
                     }}
                   />
-                  {slot.shape === "free" ? (
+                  {isPolygonShape(slot.shape) ? (
                     <Line
                       points={linePoints(slot)}
                       closed
@@ -332,6 +581,7 @@ export function SlotPositionMapper({
             {textPositions.map((field) => {
               const selected = effectiveSelection?.type === "text" && effectiveSelection.id === field.text_id;
               const preview = field.default_text || field.placeholder || field.label;
+              const gradient = textGradient(field);
               return (
                 <Fragment key={`text-${field.text_id}`}>
                   <Rect
@@ -373,6 +623,10 @@ export function SlotPositionMapper({
                     height={field.height}
                     text={preview}
                     fill={field.color}
+                    fillPriority={gradient ? "linear-gradient" : "color"}
+                    fillLinearGradientStartPoint={gradient?.start}
+                    fillLinearGradientEndPoint={gradient?.end}
+                    fillLinearGradientColorStops={gradient?.colorStops}
                     fontSize={field.font_size}
                     fontFamily={fontStack(field.font_family)}
                     fontStyle={field.font_weight === "bold" ? "bold" : "normal"}
@@ -383,6 +637,19 @@ export function SlotPositionMapper({
                 </Fragment>
               );
             })}
+            {isDrawingFence ? (
+              <Rect
+                x={0}
+                y={0}
+                width={stageBounds.width}
+                height={stageBounds.height}
+                fill="rgba(0, 0, 0, 0)"
+                onMouseDown={handleFencePointerDown}
+                onTouchStart={handleFencePointerDown}
+                onMouseMove={handleFencePointerMove}
+                onTouchMove={handleFencePointerMove}
+              />
+            ) : null}
             <Transformer ref={trRef} rotateEnabled={false} />
           </Layer>
         </Stage>
@@ -443,12 +710,22 @@ export function SlotPositionMapper({
               />
               <Select
                 value={slot.shape}
-                onValueChange={(nextShape: "rect" | "circle" | "free") =>
+                onValueChange={(nextShape: SlotPosition["shape"]) => {
+                  const nextPoints =
+                    nextShape === "free"
+                      ? slot.shape === "free"
+                        ? pointsForSlot(slot)
+                        : defaultPointsForShape("free")
+                      : nextShape === "diamond"
+                        ? defaultPointsForShape("diamond")
+                        : nextShape === "hexagon"
+                          ? defaultPointsForShape("hexagon")
+                          : null;
                   updateSlot(slot.slot_id, {
                     shape: nextShape,
-                    points: nextShape === "free" ? pointsForSlot(slot) : slot.points,
-                  })
-                }
+                    points: nextPoints,
+                  });
+                }}
               >
                 <SelectTrigger className="mt-2 h-8">
                   <SelectValue />
@@ -456,6 +733,8 @@ export function SlotPositionMapper({
                 <SelectContent>
                   <SelectItem value="rect">rect</SelectItem>
                   <SelectItem value="circle">circle</SelectItem>
+                  <SelectItem value="diamond">diamond</SelectItem>
+                  <SelectItem value="hexagon">hexagon</SelectItem>
                   <SelectItem value="free">free shape</SelectItem>
                 </SelectContent>
               </Select>
@@ -544,33 +823,109 @@ export function SlotPositionMapper({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <Input
-                    className="h-8"
-                    type="number"
-                    value={field.font_size}
-                    onChange={(event) => updateText(field.text_id, { font_size: Number(event.target.value) })}
-                  />
-                  <Input
-                    className="h-8 p-1"
-                    type="color"
-                    value={field.color}
-                    onChange={(event) => updateText(field.text_id, { color: event.target.value })}
-                  />
-                  <Select
-                    value={field.align}
-                    onValueChange={(align: TextAlign) => updateText(field.text_id, { align })}
-                  >
-                    <SelectTrigger className="h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="left">left</SelectItem>
-                      <SelectItem value="center">center</SelectItem>
-                      <SelectItem value="right">right</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                      Font Size
+                    </p>
+                    <Input
+                      className="h-8"
+                      type="number"
+                      min={8}
+                      max={320}
+                      value={field.font_size}
+                      onChange={(event) =>
+                        updateText(field.text_id, {
+                          font_size: Math.max(8, Math.min(320, Number(event.target.value) || 8)),
+                        })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                      Font Color
+                    </p>
+                    <Input
+                      className="h-8 p-1"
+                      type="color"
+                      value={field.color}
+                      onChange={(event) => updateText(field.text_id, { color: event.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1 sm:col-span-2">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                      Alignment
+                    </p>
+                    <Select
+                      value={field.align}
+                      onValueChange={(align: TextAlign) => updateText(field.text_id, { align })}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="left">left</SelectItem>
+                        <SelectItem value="center">center</SelectItem>
+                        <SelectItem value="right">right</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
+                <label className="flex items-center gap-2 text-xs text-stone-600 dark:text-stone-300">
+                  <input
+                    type="checkbox"
+                    checked={field.gradient_enabled ?? false}
+                    onChange={(event) =>
+                      updateText(field.text_id, {
+                        gradient_enabled: event.target.checked,
+                        gradient_from: field.gradient_from ?? field.color,
+                        gradient_to: field.gradient_to ?? "#92400e",
+                        gradient_angle: field.gradient_angle ?? 0,
+                      })}
+                  />
+                  Use gradient fill
+                </label>
+                {field.gradient_enabled ? (
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                        Start
+                      </p>
+                      <Input
+                        className="h-8 p-1"
+                        type="color"
+                        value={field.gradient_from ?? field.color}
+                        onChange={(event) => updateText(field.text_id, { gradient_from: event.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                        End
+                      </p>
+                      <Input
+                        className="h-8 p-1"
+                        type="color"
+                        value={field.gradient_to ?? "#92400e"}
+                        onChange={(event) => updateText(field.text_id, { gradient_to: event.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                        Angle
+                      </p>
+                      <Input
+                        className="h-8"
+                        type="number"
+                        min={-360}
+                        max={360}
+                        value={field.gradient_angle ?? 0}
+                        onChange={(event) =>
+                          updateText(field.text_id, {
+                            gradient_angle: Math.max(-360, Math.min(360, Number(event.target.value) || 0)),
+                          })}
+                      />
+                    </div>
+                  </div>
+                ) : null}
                 <label className="flex items-center gap-2 text-xs text-stone-600 dark:text-stone-300">
                   <input
                     type="checkbox"

@@ -1,5 +1,6 @@
 import io
 import logging
+import math
 import os
 import uuid
 from pathlib import Path
@@ -109,6 +110,7 @@ def _apply_adjustments(img: Image.Image, adjustments: dict) -> Image.Image:
 
 
 def _normalized_points(slot_shape: dict) -> list[tuple[float, float]]:
+    shape = str(slot_shape.get("shape", "rect")).lower()
     raw_points = slot_shape.get("points") or []
     points: list[tuple[float, float]] = []
     for point in raw_points:
@@ -122,6 +124,12 @@ def _normalized_points(slot_shape: dict) -> list[tuple[float, float]]:
     if len(points) >= 3:
         return points
 
+    if shape == "diamond":
+        return [(0.5, 0.02), (0.98, 0.5), (0.5, 0.98), (0.02, 0.5)]
+
+    if shape == "hexagon":
+        return [(0.25, 0.02), (0.75, 0.02), (0.98, 0.5), (0.75, 0.98), (0.25, 0.98), (0.02, 0.5)]
+
     return [(0.08, 0.08), (0.92, 0.04), (0.98, 0.76), (0.66, 0.98), (0.08, 0.9), (0.02, 0.3)]
 
 
@@ -134,7 +142,7 @@ def _apply_slot_mask(slot_layer: Image.Image, slot_shape: dict, width: int, heig
         slot_layer.putalpha(mask)
         return
 
-    if shape in {"free", "polygon"}:
+    if shape in {"free", "polygon", "diamond", "hexagon"}:
         mask = Image.new("L", (width, height), 0)
         draw = ImageDraw.Draw(mask)
         polygon = [(int(px * width), int(py * height)) for px, py in _normalized_points(slot_shape)]
@@ -149,7 +157,7 @@ def _point_in_slot_shape(slot_shape: dict, x: float, y: float) -> bool:
         dy = y - 0.5
         return dx * dx + dy * dy <= 0.25
 
-    if shape in {"free", "polygon"}:
+    if shape in {"free", "polygon", "diamond", "hexagon"}:
         points = _normalized_points(slot_shape)
         inside = False
         j = len(points) - 1
@@ -285,6 +293,40 @@ def _parse_color(value: str) -> tuple[int, int, int, int]:
     return parsed[0], parsed[1], parsed[2], 255
 
 
+def _parse_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return False
+
+
+def _build_linear_gradient(
+    width: int,
+    height: int,
+    start_color: tuple[int, int, int, int],
+    end_color: tuple[int, int, int, int],
+    angle: float,
+) -> Image.Image:
+    span = max(1, int(math.hypot(width, height)))
+    gradient = Image.new("RGBA", (span, span), (0, 0, 0, 0))
+    gradient_draw = ImageDraw.Draw(gradient)
+    denominator = max(1, span - 1)
+
+    for x in range(span):
+        mix = x / denominator
+        color = tuple(
+            int(start_color[channel] + (end_color[channel] - start_color[channel]) * mix)
+            for channel in range(4)
+        )
+        gradient_draw.line((x, 0, x, span), fill=color)
+
+    rotated = gradient.rotate(-angle, resample=Image.Resampling.BICUBIC, expand=True)
+    return ImageOps.fit(rotated, (width, height), method=Image.Resampling.BICUBIC, centering=(0.5, 0.5))
+
+
 def _draw_text_positions(
     image: Image.Image,
     text_positions: list[dict] | None,
@@ -320,24 +362,44 @@ def _draw_text_positions(
         font_size = max(1, int(float(text_shape.get("font_size", 72))))
         align = str(text_shape.get("align", "center")).lower()
         color = _parse_color(str(text_shape.get("color", "#1c1917")))
+        gradient_enabled = _parse_bool(text_shape.get("gradient_enabled", False))
+        gradient_from = _parse_color(str(text_shape.get("gradient_from") or text_shape.get("color", "#1c1917")))
+        gradient_to = _parse_color(str(text_shape.get("gradient_to") or text_shape.get("color", "#1c1917")))
+        try:
+            gradient_angle = float(text_shape.get("gradient_angle", 0))
+        except (TypeError, ValueError):
+            gradient_angle = 0.0
 
         font = _load_font(family, font_size, weight)
         lines = _wrap_text(draw, value, font, width)
         bbox = draw.textbbox((0, 0), "Ay", font=font)
         line_height = max(1, int((bbox[3] - bbox[1]) * 1.2))
         total_height = line_height * len(lines)
-        cursor_y = y + max(0, int((height - total_height) / 2))
+        cursor_y = max(0, int((height - total_height) / 2))
+        laid_out_lines: list[tuple[str, int, int]] = []
 
         for line in lines:
             line_width = _text_width(draw, line, font)
             if align == "right":
-                cursor_x = x + max(0, width - line_width)
+                cursor_x = max(0, width - line_width)
             elif align == "left":
-                cursor_x = x
+                cursor_x = 0
             else:
-                cursor_x = x + max(0, int((width - line_width) / 2))
-            draw.text((cursor_x, cursor_y), line, fill=color, font=font)
+                cursor_x = max(0, int((width - line_width) / 2))
+            laid_out_lines.append((line, cursor_x, cursor_y))
             cursor_y += line_height
+
+        if gradient_enabled:
+            text_mask = Image.new("L", (width, height), 0)
+            mask_draw = ImageDraw.Draw(text_mask)
+            for line, local_x, local_y in laid_out_lines:
+                mask_draw.text((local_x, local_y), line, fill=255, font=font)
+            gradient = _build_linear_gradient(width, height, gradient_from, gradient_to, gradient_angle)
+            image.paste(gradient, (x, y), text_mask)
+            continue
+
+        for line, local_x, local_y in laid_out_lines:
+            draw.text((x + local_x, y + local_y), line, fill=color, font=font)
 
 
 def compose_print_png(
