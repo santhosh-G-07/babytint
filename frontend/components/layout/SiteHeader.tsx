@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Menu, UserCircle2 } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { Menu, Search, Sparkles, UserCircle2 } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
 
 import { CartDrawer } from "@/components/cart/CartDrawer";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
@@ -28,10 +29,20 @@ const links = [
   { href: "/orders", label: "Orders" },
 ];
 
+const announcementItems = [
+  "Weekend Offer: Up to 18% OFF on selected BabyTint frames",
+  "Recent sale: White 12x8 Frame sold in Bengaluru",
+  "Recent sale: 2-slot frame sold in Hyderabad",
+  "Free design help on WhatsApp and email",
+  "Secure Razorpay checkout and pan-India delivery",
+];
+
 export function SiteHeader() {
   const pathname = usePathname();
+  const router = useRouter();
   const [profile, setProfile] = useState<AuthProfile | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [searchValue, setSearchValue] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -77,6 +88,8 @@ export function SiteHeader() {
     return links;
   }, [profile?.role]);
 
+  const marqueeItems = useMemo(() => [...announcementItems, ...announcementItems], []);
+
   const isActiveLink = (href: string) => {
     if (href === "/") {
       return pathname === "/";
@@ -84,11 +97,20 @@ export function SiteHeader() {
     return pathname === href || pathname.startsWith(`${href}/`);
   };
 
+  const submitSearch = () => {
+    const query = searchValue.trim();
+    router.push(query ? `/shop?search=${encodeURIComponent(query)}` : "/shop");
+  };
+
   const accountHref = profile?.role === "admin" ? "/admin" : "/orders";
 
   const authActionsDesktop = profile ? (
     <div className="flex items-center gap-2">
-      <Button variant="ghost" asChild>
+      <Button
+        variant="secondary"
+        className="rounded-xl border border-[#d6e7ff] bg-white text-[#1f3b5f] hover:bg-[#eef5ff]"
+        asChild
+      >
         <Link href={accountHref}>
           <UserCircle2 className="mr-2 h-4 w-4" />
           {profile.name?.split(" ")[0] ?? "Account"}
@@ -96,6 +118,7 @@ export function SiteHeader() {
       </Button>
       <Button
         variant="outline"
+        className="rounded-xl border-[#232323] bg-[#1f1f1f] text-white hover:bg-[#333333] hover:text-white"
         onClick={async () => {
           await supabase.auth.signOut();
           clearAdminToken();
@@ -107,10 +130,14 @@ export function SiteHeader() {
     </div>
   ) : (
     <div className="flex items-center gap-2">
-      <Button variant="ghost" asChild>
+      <Button
+        variant="ghost"
+        className="rounded-xl text-[#1f3b5f] hover:bg-[#eef5ff] hover:text-[#1f3b5f]"
+        asChild
+      >
         <Link href="/login">Login</Link>
       </Button>
-      <Button asChild>
+      <Button className="rounded-xl border-0 bg-[#04a16b] text-white hover:bg-[#03875a]" asChild>
         <Link href="/register">Register</Link>
       </Button>
     </div>
@@ -118,15 +145,19 @@ export function SiteHeader() {
 
   const authActionsMobile = profile ? (
     <div className="space-y-2">
-      <Button variant="outline" className="w-full justify-start" asChild>
+      <Button
+        variant="outline"
+        className="w-full justify-start border-[#d6e7ff] bg-white text-[#1f3b5f] hover:bg-[#eef5ff]"
+        asChild
+      >
         <Link href={accountHref}>
           <UserCircle2 className="mr-2 h-4 w-4" />
           {profile.name?.split(" ")[0] ?? "Account"}
         </Link>
       </Button>
       <Button
-        variant="ghost"
-        className="w-full justify-start"
+        variant="secondary"
+        className="w-full justify-start border border-[#232323] bg-[#1f1f1f] text-white hover:bg-[#333333]"
         onClick={async () => {
           await supabase.auth.signOut();
           clearAdminToken();
@@ -138,84 +169,133 @@ export function SiteHeader() {
     </div>
   ) : (
     <div className="space-y-2">
-      <Button variant="outline" className="w-full justify-start" asChild>
+      <Button
+        variant="outline"
+        className="w-full justify-start border-[#d6e7ff] bg-white text-[#1f3b5f] hover:bg-[#eef5ff]"
+        asChild
+      >
         <Link href="/login">Login</Link>
       </Button>
-      <Button className="w-full justify-start" asChild>
+      <Button className="w-full justify-start border-0 bg-[#04a16b] text-white hover:bg-[#03875a]" asChild>
         <Link href="/register">Create account</Link>
       </Button>
     </div>
   );
 
   return (
-    <header className="sticky top-0 z-40 border-b border-stone-200/70 bg-[hsl(var(--background))/0.9] backdrop-blur dark:border-stone-800/80">
-      <div className="border-b border-stone-200/70 bg-stone-100/70 text-xs text-stone-600 dark:border-stone-800/70 dark:bg-stone-900/50 dark:text-stone-300">
-        <div className="container-shell flex h-8 items-center justify-between">
-          <p>Free design support on WhatsApp and email.</p>
-          <p>Secure Razorpay checkout | Pan-India delivery</p>
+    <header className="sticky top-0 z-50 border-b border-[#d6e5ff] bg-white/95 backdrop-blur-md">
+      <div className="relative overflow-hidden border-b border-[#3b77cb] bg-[#4d8ce8] text-white">
+        <div className="announcement-track">
+          {marqueeItems.map((item, index) => (
+            <div key={`${item}-${index}`} className="announcement-item">
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>{item}</span>
+            </div>
+          ))}
         </div>
       </div>
       <div className="container-shell flex h-16 items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden" aria-label="Open menu">
+              <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open menu">
                 <Menu className="h-4 w-4" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-[260px]">
+            <SheetContent side="left" className="w-[290px]">
               <div className="mt-6 space-y-3">
+                <form
+                  className="flex items-center gap-2"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    submitSearch();
+                  }}
+                >
+                  <Input
+                    placeholder="Search frames..."
+                    value={searchValue}
+                    onChange={(event) => setSearchValue(event.target.value)}
+                  />
+                  <Button type="submit" size="icon" aria-label="Search">
+                    <Search className="h-4 w-4" />
+                  </Button>
+                </form>
                 {navLinks.map((item) => (
                   <Link
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "block rounded-lg px-3 py-2 text-sm",
+                      "block rounded-lg px-3 py-2 text-sm font-medium transition",
                       isActiveLink(item.href)
-                        ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
-                        : "text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800",
+                        ? "bg-[#fc859a] text-white"
+                        : "text-[#2a4d75] hover:bg-[#ffe8ee]",
                     )}
                   >
                     {item.label}
                   </Link>
                 ))}
-                <div className="my-2 border-t border-stone-200 pt-3 dark:border-stone-800" />
+                <div className="my-2 border-t border-[#e3ecff] pt-3" />
                 {loadingAuth ? (
-                  <div className="h-10 w-full animate-pulse rounded-md bg-stone-200 dark:bg-stone-800" />
+                  <div className="h-10 w-full animate-pulse rounded-md bg-[#ecf4ff]" />
                 ) : (
                   authActionsMobile
                 )}
               </div>
             </SheetContent>
           </Sheet>
-          <Link href="/" className="display-font text-2xl tracking-tight">
+          <Link href="/" className="display-font text-[2rem] leading-none tracking-tight text-[#122f55]">
             BabyTint
           </Link>
         </div>
 
-        <nav className="hidden items-center gap-1 md:flex">
-          {navLinks.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "rounded-md px-3 py-2 text-sm font-medium",
-                isActiveLink(item.href)
-                  ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
-                  : "text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800",
-              )}
+        <div className="hidden lg:flex flex-1 items-center gap-3 px-2">
+          <nav className="flex items-center gap-1">
+            {navLinks.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "rounded-md px-3 py-2 text-sm font-semibold transition",
+                  isActiveLink(item.href)
+                    ? "bg-[#fc859a] text-white"
+                    : "text-[#506787] hover:bg-[#ffe8ee]",
+                )}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+
+          <form
+            className="ml-auto hidden max-w-[350px] flex-1 items-center gap-2 xl:flex"
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitSearch();
+            }}
+          >
+            <Input
+              className="h-9 rounded-full border-[#d4e5ff] bg-[#f8fbff] text-[#1f3b5f] placeholder:text-[#7790ae]"
+              placeholder="Search frames..."
+              value={searchValue}
+              onChange={(event) => setSearchValue(event.target.value)}
+            />
+            <Button
+              type="submit"
+              size="icon"
+              className="h-9 w-9 rounded-full border-0 bg-[#f7b500] text-[#4f3500] hover:bg-[#e5a900]"
+              aria-label="Search"
             >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+              <Search className="h-4 w-4" />
+            </Button>
+          </form>
+        </div>
 
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <CartDrawer />
-          <div className="hidden md:block">
+          <div className="hidden xl:block">
             {loadingAuth ? (
-              <div className="h-10 w-28 animate-pulse rounded-md bg-stone-200 dark:bg-stone-800" />
+              <div className="h-10 w-28 animate-pulse rounded-md bg-[#ecf4ff]" />
             ) : (
               authActionsDesktop
             )}

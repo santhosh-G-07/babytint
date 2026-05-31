@@ -8,9 +8,12 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: "border-transparent bg-stone-900 text-white",
-        secondary: "border-transparent bg-stone-100 text-stone-900",
-        outline: "border-stone-200 text-stone-700 dark:border-stone-700 dark:text-stone-300",
+        default:
+          "border-transparent bg-[#4d8ce8] text-white dark:bg-[#5ea0ff] dark:text-white",
+        secondary:
+          "border-transparent bg-[#edf5ff] text-[#2f63a7] dark:bg-[#1a3557] dark:text-[#cde2ff]",
+        outline:
+          "border-[#9ec0ec] text-[#2f63a7] dark:border-[#5987c2] dark:text-[#cde2ff]",
         success: "border-transparent bg-emerald-100 text-emerald-900",
       },
     },
@@ -29,4 +32,3 @@ function Badge({ className, variant, ...props }: BadgeProps) {
 }
 
 export { Badge, badgeVariants };
-

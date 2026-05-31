@@ -22,10 +22,13 @@ export function CartDrawer() {
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button variant="outline" className="relative">
+        <Button
+          variant="outline"
+          className="relative rounded-xl border-[#d6e7ff] bg-white text-[#1f3b5f] hover:bg-[#eef5ff]"
+        >
           <ShoppingBag className="mr-2 h-4 w-4" />
           Cart
-          <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-stone-900 px-1.5 text-xs text-white dark:bg-stone-100 dark:text-stone-900">
+          <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#f7b500] px-1.5 text-xs font-bold text-[#4f3500]">
             {cart.length}
           </span>
         </Button>
@@ -46,7 +49,7 @@ export function CartDrawer() {
                   <div>
                     <p className="font-medium">{item.frame.name}</p>
                     <p className="text-sm text-stone-500 dark:text-stone-400">
-                      Qty {item.quantity} • {inr(item.price)}
+                      Qty {item.quantity} | {inr(item.price)}
                     </p>
                   </div>
                   <Button
@@ -81,4 +84,3 @@ export function CartDrawer() {
     </Sheet>
   );
 }
-

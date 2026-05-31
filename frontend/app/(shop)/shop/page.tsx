@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "next/navigation";
 
 import { FilterBar } from "@/components/shop/FilterBar";
 import { FrameCard } from "@/components/shop/FrameCard";
@@ -10,8 +11,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getFrames } from "@/lib/api";
 
 export default function ShopPage() {
+  const searchParams = useSearchParams();
+  const searchFromUrl = searchParams.get("search") ?? "";
   const [filters, setFilters] = useState({
-    search: "",
+    search: searchFromUrl,
     size: "",
     category: "",
     minPrice: "",
@@ -52,7 +55,7 @@ export default function ShopPage() {
     <div className="container-shell py-8 sm:py-10">
       <h1 className="text-3xl font-semibold">Shop Frames</h1>
       <p className="mt-2 text-stone-600 dark:text-stone-300">
-        Filter by size, category and price to find your perfect layout.
+        Explore online baby and kids photo frames by size, category, and budget.
       </p>
       <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
         Need help choosing?{" "}
