@@ -10,7 +10,6 @@ import { toast } from "sonner";
 
 import { EditorToolbar } from "@/components/editor/EditorToolbar";
 import { PhotoCropperSheet, type CropSelection } from "@/components/editor/PhotoCropperSheet";
-import { SlotEditor } from "@/components/editor/SlotEditor";
 import { TextEditor } from "@/components/editor/TextEditor";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -100,9 +99,9 @@ export default function EditorPage() {
   const pendingSlotIdRef = useRef<number | null>(null);
   const [savingComposite, setSavingComposite] = useState(false);
   const [uploadingSlotId, setUploadingSlotId] = useState<number | null>(null);
-  const [slotPickerOpen, setSlotPickerOpen] = useState(false);
   const [cropTask, setCropTask] = useState<CropTask | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [selectedTextId, setSelectedTextId] = useState<number | null>(null);
 
   const frameRef = params.id;
   const { data: frame, isLoading, error } = useQuery({
@@ -122,6 +121,10 @@ export default function EditorPage() {
     updateSlotAdjustments,
     updateTextValue,
     updateTextFont,
+    updateTextStyle,
+    styleTextRange,
+    clearTextRangeStyle,
+    updateTextBox,
     swapSlots,
     toCustomizationData,
   } = useEditorStore();
@@ -164,22 +167,8 @@ export default function EditorPage() {
   const openFilePickerForSlot = (slotId: number) => {
     pendingSlotIdRef.current = slotId;
     selectSlot(slotId);
+    setSelectedTextId(null);
     fileInputRef.current?.click();
-  };
-
-  const startUploadFlow = (slotId?: number) => {
-    if (!frame) {
-      return;
-    }
-    if (typeof slotId === "number") {
-      openFilePickerForSlot(slotId);
-      return;
-    }
-    if (frame.slot_positions.length === 1) {
-      openFilePickerForSlot(frame.slot_positions[0].slot_id);
-      return;
-    }
-    setSlotPickerOpen(true);
   };
 
   const handleFileSelected = (fileList: FileList | null) => {
@@ -234,11 +223,6 @@ export default function EditorPage() {
 
   const handleCancelCrop = () => {
     setCropTask(null);
-  };
-
-  const handleClearSlot = (slotId: number) => {
-    setSlotImage(slotId, "");
-    updateSlotAdjustments(slotId, { ...DEFAULT_PHOTO_ADJUSTMENTS });
   };
 
   const handleAddToCart = async () => {
@@ -385,7 +369,7 @@ export default function EditorPage() {
         <div>
           <h1 className="text-3xl font-semibold">Customize {frame.name}</h1>
           <p className="text-sm text-stone-500 dark:text-stone-400">
-            Upload each photo, crop it inside its slot, then preview the frame.
+            Click directly on the frame to add photos and edit text where it appears.
           </p>
         </div>
         <Button variant="outline" onClick={() => router.push(`/shop/${frame.slug}`)}>
@@ -397,8 +381,6 @@ export default function EditorPage() {
         <EditorToolbar
           slots={frame.slot_positions}
           slotState={slots}
-          selectedSlotId={selectedSlotId}
-          onSelectSlot={selectSlot}
           onPreview={handleOpenPreview}
           onAddToCart={handleAddToCart}
           addToCartBusy={savingComposite}
@@ -410,68 +392,36 @@ export default function EditorPage() {
             slotState={slots}
             textState={texts}
             selectedSlotId={selectedSlotId}
-            onSelectSlot={selectSlot}
+            onRequestSlotUpload={openFilePickerForSlot}
+            onSelectSlot={(slotId) => {
+              selectSlot(slotId);
+              setSelectedTextId(null);
+            }}
             onAdjustmentsChange={(slotId, patch) => updateSlotAdjustments(slotId, patch)}
             onSwapSlots={swapSlots}
+            selectedTextId={selectedTextId}
+            onSelectText={setSelectedTextId}
+            onTextChange={updateTextValue}
+            onTextBoxChange={(textId, patch) => updateTextBox(textId, patch)}
+            textEditable
             stageRef={stageRef}
-            showGuides
+            showGuides={false}
           />
           <div className="space-y-4">
-            <SlotEditor
-              slots={frame.slot_positions}
-              slotState={slots}
-              selectedSlotId={selectedSlotId}
-              uploadingSlotId={uploadingSlotId}
-              onSelectSlot={selectSlot}
-              onStartUpload={startUploadFlow}
-              onClearSlot={handleClearSlot}
-            />
             <TextEditor
               textPositions={frame.text_positions}
               textState={texts}
+              selectedTextId={selectedTextId}
+              onSelectText={setSelectedTextId}
               onTextChange={updateTextValue}
               onFontChange={updateTextFont}
+              onStyleChange={updateTextStyle}
+              onRangeStyle={styleTextRange}
+              onClearRangeStyle={clearTextRangeStyle}
             />
           </div>
         </div>
       </div>
-
-      {slotPickerOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div
-            className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-stone-900"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Choose photo slot"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">Choose Photo Slot</h2>
-              <Button variant="ghost" size="icon" onClick={() => setSlotPickerOpen(false)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="mt-4 grid gap-3">
-              {frame.slot_positions.map((slot) => {
-                const hasImage = Boolean(slots[slot.slot_id]?.image_url);
-                return (
-                  <Button
-                    key={slot.slot_id}
-                    variant={hasImage ? "outline" : "default"}
-                    className="justify-between"
-                    onClick={() => {
-                      setSlotPickerOpen(false);
-                      openFilePickerForSlot(slot.slot_id);
-                    }}
-                  >
-                    <span>{slotTitle(slot)}</span>
-                    <span className="text-xs opacity-75">{hasImage ? "Change" : "Upload"}</span>
-                  </Button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {cropTask ? (
         <PhotoCropperSheet

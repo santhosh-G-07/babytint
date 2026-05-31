@@ -19,6 +19,15 @@ export type TextFontGroup = "name" | "numbers" | "details" | "general";
 export type TextWeight = "normal" | "bold";
 export type TextAlign = "left" | "center" | "right";
 
+export interface RichTextRun {
+  start: number;
+  end: number;
+  font_family?: string;
+  font_weight?: TextWeight;
+  color?: string;
+  font_size?: number;
+}
+
 export interface TextPosition {
   text_id: number;
   label: string;
@@ -38,6 +47,8 @@ export interface TextPosition {
   gradient_to?: string;
   gradient_angle?: number;
   align: TextAlign;
+  line_height?: number;
+  letter_spacing?: number;
   allow_customer_font?: boolean;
 }
 
@@ -84,6 +95,16 @@ export interface CustomizationText {
   value: string;
   font_family?: string;
   font_weight?: TextWeight;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  font_size?: number;
+  color?: string;
+  align?: TextAlign;
+  line_height?: number;
+  letter_spacing?: number;
+  rich_runs?: RichTextRun[];
 }
 
 export interface CustomizationData {
@@ -124,6 +145,16 @@ export interface EditorTextState {
   value: string;
   font_family?: string;
   font_weight?: TextWeight;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  font_size?: number;
+  color?: string;
+  align?: TextAlign;
+  line_height?: number;
+  letter_spacing?: number;
+  rich_runs?: RichTextRun[];
 }
 
 export interface OrderItem {

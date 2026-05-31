@@ -224,6 +224,13 @@ export default function HomePage() {
                     View
                   </Link>
                 </div>
+                <Image
+                  src="/images/cute-baby-hero.png"
+                  alt="Cute baby hero sticker"
+                  width={96}
+                  height={96}
+                  className="pointer-events-none absolute -bottom-1 right-3 hidden h-20 w-20 object-contain drop-shadow-md sm:block"
+                />
               </div>
             </div>
           </div>

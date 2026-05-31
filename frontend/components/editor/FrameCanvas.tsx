@@ -2,12 +2,23 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Konva from "konva";
-import { Group, Image as KonvaImage, Layer, Rect, Stage, Circle, Line, Text as KonvaText } from "react-konva";
+import {
+  Group,
+  Image as KonvaImage,
+  Layer,
+  Rect,
+  Stage,
+  Circle,
+  Line,
+  Text as KonvaText,
+  Shape,
+  Transformer,
+} from "react-konva";
 import useImage from "use-image";
 
 import { fontStack } from "@/lib/frame-fonts";
 import { shouldRenderSlotAboveFrame } from "@/lib/frame-slot-layer";
-import type { EditorSlotState, EditorTextState, FrameTemplate, SlotAdjustments, SlotPosition, TextPosition } from "@/types";
+import type { EditorSlotState, EditorTextState, FrameTemplate, RichTextRun, SlotAdjustments, SlotPosition, TextPosition } from "@/types";
 
 const defaultFreePoints = [
   { x: 0.08, y: 0.08 },
@@ -116,6 +127,170 @@ function textGradient(field: TextPosition) {
   };
 }
 
+function resolvedTextField(field: TextPosition, state: EditorTextState | undefined) {
+  return {
+    ...field,
+    x: state?.x ?? field.x,
+    y: state?.y ?? field.y,
+    width: Math.max(32, state?.width ?? field.width),
+    height: Math.max(24, state?.height ?? field.height),
+    font_size: Math.max(8, state?.font_size ?? field.font_size),
+    color: state?.color ?? field.color,
+    align: state?.align ?? field.align,
+    line_height: state?.line_height ?? field.line_height ?? 1.2,
+    letter_spacing: state?.letter_spacing ?? field.letter_spacing ?? 0,
+    font_family: state?.font_family ?? field.font_family,
+    font_weight: state?.font_weight ?? field.font_weight,
+  };
+}
+
+type ResolvedTextField = ReturnType<typeof resolvedTextField>;
+
+interface RichCharStyle {
+  font_family: string;
+  font_weight: "normal" | "bold";
+  color: string;
+  font_size: number;
+}
+
+interface RichGlyph {
+  char: string;
+  x: number;
+  y: number;
+  style: RichCharStyle;
+}
+
+let measureContext: CanvasRenderingContext2D | null = null;
+
+function getMeasureContext() {
+  if (measureContext) {
+    return measureContext;
+  }
+  if (typeof document === "undefined") {
+    return null;
+  }
+  const canvas = document.createElement("canvas");
+  measureContext = canvas.getContext("2d");
+  return measureContext;
+}
+
+function toFont(style: RichCharStyle) {
+  return `${style.font_weight === "bold" ? "bold " : ""}${Math.max(8, style.font_size)}px ${fontStack(style.font_family)}`;
+}
+
+function buildCharStyles(value: string, resolved: ResolvedTextField, runs?: RichTextRun[]) {
+  const baseStyle: RichCharStyle = {
+    font_family: resolved.font_family,
+    font_weight: resolved.font_weight,
+    color: resolved.color,
+    font_size: resolved.font_size,
+  };
+  const styles: RichCharStyle[] = Array.from({ length: value.length }, () => ({ ...baseStyle }));
+  for (const run of runs ?? []) {
+    const start = Math.max(0, Math.min(value.length, Math.floor(run.start)));
+    const end = Math.max(0, Math.min(value.length, Math.floor(run.end)));
+    if (end <= start) {
+      continue;
+    }
+    for (let index = start; index < end; index += 1) {
+      styles[index] = {
+        font_family: run.font_family ?? styles[index].font_family,
+        font_weight: run.font_weight ?? styles[index].font_weight,
+        color: run.color ?? styles[index].color,
+        font_size: run.font_size ?? styles[index].font_size,
+      };
+    }
+  }
+  return styles;
+}
+
+function layoutRichGlyphs(
+  value: string,
+  resolved: ResolvedTextField,
+  runs: RichTextRun[] | undefined,
+) {
+  if (!value.trim()) {
+    return [];
+  }
+
+  const ctx = getMeasureContext();
+  if (!ctx) {
+    return [];
+  }
+
+  const boxWidth = Math.max(1, resolved.width);
+  const boxHeight = Math.max(1, resolved.height);
+  const letterSpacing = resolved.letter_spacing ?? 0;
+  const lineHeightRatio = resolved.line_height ?? 1.2;
+  const charStyles = buildCharStyles(value, resolved, runs);
+
+  const lines: Array<{ glyphs: RichGlyph[]; width: number; maxFont: number }> = [];
+  let line: { glyphs: RichGlyph[]; width: number; maxFont: number } = { glyphs: [], width: 0, maxFont: 0 };
+
+  const pushLine = () => {
+    lines.push(line);
+    line = { glyphs: [], width: 0, maxFont: 0 };
+  };
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (char === "\r") {
+      continue;
+    }
+    if (char === "\n") {
+      pushLine();
+      continue;
+    }
+    const style = charStyles[index];
+    ctx.font = toFont(style);
+    const charWidth = ctx.measureText(char).width;
+    const advance = charWidth + letterSpacing;
+
+    if (line.glyphs.length > 0 && line.width + advance > boxWidth) {
+      pushLine();
+    }
+
+    const glyph: RichGlyph = {
+      char,
+      x: line.width,
+      y: 0,
+      style,
+    };
+    line.glyphs.push(glyph);
+    line.width += advance;
+    line.maxFont = Math.max(line.maxFont, style.font_size);
+  }
+
+  pushLine();
+
+  const lineHeights = lines.map((item) => Math.max(1, item.maxFont * lineHeightRatio));
+  const totalHeight = lineHeights.reduce((sum, height) => sum + height, 0);
+  let cursorY = Math.max(0, (boxHeight - totalHeight) / 2);
+  const positioned: RichGlyph[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const currentLine = lines[index];
+    const lineHeight = lineHeights[index];
+    const visualWidth = Math.max(0, currentLine.width - letterSpacing);
+    const offsetX =
+      resolved.align === "right"
+        ? Math.max(0, boxWidth - visualWidth)
+        : resolved.align === "center"
+          ? Math.max(0, (boxWidth - visualWidth) / 2)
+          : 0;
+    for (const glyph of currentLine.glyphs) {
+      positioned.push({
+        ...glyph,
+        x: glyph.x + offsetX,
+        y: cursorY,
+      });
+    }
+    cursorY += lineHeight;
+  }
+
+  return positioned;
+}
+
 function isPointInSlot(x: number, y: number, slot: SlotPosition) {
   if (slot.shape === "circle") {
     const cx = slot.x + slot.width / 2;
@@ -144,45 +319,211 @@ function isPointInSlot(x: number, y: number, slot: SlotPosition) {
   return x >= slot.x && x <= slot.x + slot.width && y >= slot.y && y <= slot.y + slot.height;
 }
 
+function slotPrompt(slot: SlotPosition, index: number) {
+  const customLabel = slot.label?.trim();
+  if (customLabel) {
+    return customLabel.toLowerCase().startsWith("add ") ? customLabel : `Add ${customLabel}`;
+  }
+  if (index === 0) {
+    return "Add Baby Photo";
+  }
+  if (index === 1) {
+    return "Add Parent Photo";
+  }
+  return `Add Photo ${index + 1}`;
+}
+
+function textPrompt(field: TextPosition, index: number) {
+  const source = `${field.label ?? ""} ${field.placeholder ?? ""}`.toLowerCase();
+  if (source.includes("baby") && source.includes("name")) {
+    return "Add Baby Name here";
+  }
+  if (source.includes("hospital")) {
+    return "Add Hospital Name here";
+  }
+  if (source.includes("dob") || source.includes("born") || source.includes("date")) {
+    return "Add DOB here";
+  }
+  if (source.includes("place")) {
+    return "Add Place of Birth here";
+  }
+  if (source.includes("parent") || source.includes("mom") || source.includes("dad")) {
+    return "Add Parent Name here";
+  }
+  return `Add Text ${index + 1} here`;
+}
+
 function TextLayer({
   textPositions,
   textState,
+  editable = false,
+  selectedTextId = null,
+  onSelectText,
+  onTextBoxChange,
+  onStartTextEdit,
 }: {
   textPositions: TextPosition[];
   textState: Record<number, EditorTextState>;
+  editable?: boolean;
+  selectedTextId?: number | null;
+  onSelectText?: (textId: number | null) => void;
+  onTextBoxChange?: (textId: number, patch: { x?: number; y?: number; width?: number; height?: number }) => void;
+  onStartTextEdit?: (textId: number) => void;
 }) {
+  const textRefs = useRef<Record<number, Konva.Rect | null>>({});
+  const transformerRef = useRef<Konva.Transformer>(null);
+
+  useEffect(() => {
+    if (!editable || !transformerRef.current) {
+      return;
+    }
+    if (selectedTextId === null) {
+      transformerRef.current.nodes([]);
+      transformerRef.current.getLayer()?.batchDraw();
+      return;
+    }
+    const selectedNode = textRefs.current[selectedTextId];
+    if (!selectedNode) {
+      transformerRef.current.nodes([]);
+      transformerRef.current.getLayer()?.batchDraw();
+      return;
+    }
+    transformerRef.current.nodes([selectedNode]);
+    transformerRef.current.getLayer()?.batchDraw();
+  }, [editable, selectedTextId, textPositions, textState]);
+
   return (
     <>
-      {textPositions.map((field) => {
+      {textPositions.map((field, index) => {
         const state = textState[field.text_id];
-        const value = state?.value || field.default_text || "";
-        const fontWeight = state?.font_weight ?? field.font_weight;
-        const gradient = textGradient(field);
-        if (!value.trim()) {
+        const value = state?.value ?? field.default_text ?? "";
+        const resolved = resolvedTextField(field, state);
+        const fontWeight = resolved.font_weight;
+        const richRuns = state?.rich_runs ?? [];
+        const hasRichRuns = value.trim().length > 0 && richRuns.length > 0;
+        const richGlyphs = hasRichRuns ? layoutRichGlyphs(value, resolved, richRuns) : [];
+        const gradient = hasRichRuns ? null : textGradient(resolved);
+        const preview = value.trim() ? value : field.placeholder || field.label || textPrompt(field, index);
+        if (!preview.trim() && !editable) {
           return null;
         }
         return (
-          <KonvaText
-            key={`text-${field.text_id}`}
-            x={field.x}
-            y={field.y}
-            width={field.width}
-            height={field.height}
-            text={value}
-            fontSize={field.font_size}
-            fontFamily={fontStack(state?.font_family ?? field.font_family)}
-            fontStyle={fontWeight === "bold" ? "bold" : "normal"}
-            fill={field.color}
-            fillPriority={gradient ? "linear-gradient" : "color"}
-            fillLinearGradientStartPoint={gradient?.start}
-            fillLinearGradientEndPoint={gradient?.end}
-            fillLinearGradientColorStops={gradient?.colorStops}
-            align={field.align}
-            verticalAlign="middle"
-            listening={false}
-          />
+          <Group key={`text-${field.text_id}`}>
+            {editable && selectedTextId === field.text_id ? (
+              <Rect
+                name="editor-guide"
+                ref={(node) => {
+                  textRefs.current[field.text_id] = node;
+                }}
+                x={resolved.x}
+                y={resolved.y}
+                width={resolved.width}
+                height={resolved.height}
+                fill="rgba(245, 158, 11, 0.10)"
+                stroke="#d97706"
+                strokeWidth={3}
+                dash={[]}
+                draggable
+                onClick={() => {
+                  const shouldOpenEditor = !value.trim() || selectedTextId === field.text_id;
+                  onSelectText?.(field.text_id);
+                  if (editable && shouldOpenEditor) {
+                    onStartTextEdit?.(field.text_id);
+                  }
+                }}
+                onTap={() => {
+                  const shouldOpenEditor = !value.trim() || selectedTextId === field.text_id;
+                  onSelectText?.(field.text_id);
+                  if (editable && shouldOpenEditor) {
+                    onStartTextEdit?.(field.text_id);
+                  }
+                }}
+                onDblClick={() => onStartTextEdit?.(field.text_id)}
+                onDblTap={() => onStartTextEdit?.(field.text_id)}
+                onDragStart={() => onSelectText?.(field.text_id)}
+                onDragEnd={(event) => {
+                  onSelectText?.(field.text_id);
+                  onTextBoxChange?.(field.text_id, {
+                    x: Math.max(0, event.target.x()),
+                    y: Math.max(0, event.target.y()),
+                  });
+                }}
+                onTransformEnd={(event) => {
+                  const node = event.target as Konva.Rect;
+                  const width = Math.max(32, node.width() * node.scaleX());
+                  const height = Math.max(24, node.height() * node.scaleY());
+                  const x = Math.max(0, node.x());
+                  const y = Math.max(0, node.y());
+                  node.scaleX(1);
+                  node.scaleY(1);
+                  onSelectText?.(field.text_id);
+                  onTextBoxChange?.(field.text_id, { x, y, width, height });
+                }}
+              />
+            ) : null}
+            {hasRichRuns ? (
+              <Shape
+                listening={false}
+                sceneFunc={(context) => {
+                  const native = (context as unknown as { _context: CanvasRenderingContext2D })._context;
+                  native.save();
+                  native.textBaseline = "top";
+                  for (const glyph of richGlyphs) {
+                    native.font = toFont(glyph.style);
+                    native.fillStyle = glyph.style.color;
+                    native.fillText(glyph.char, resolved.x + glyph.x, resolved.y + glyph.y);
+                  }
+                  native.restore();
+                }}
+              />
+            ) : (
+              <KonvaText
+                x={resolved.x}
+                y={resolved.y}
+                width={resolved.width}
+                height={resolved.height}
+                text={preview}
+                fontSize={resolved.font_size}
+                fontFamily={fontStack(resolved.font_family)}
+                fontStyle={fontWeight === "bold" ? "bold" : "normal"}
+                fill={value.trim() ? resolved.color : "rgba(100, 116, 139, 0.75)"}
+                fillPriority={value.trim() && gradient ? "linear-gradient" : "color"}
+                fillLinearGradientStartPoint={gradient?.start}
+                fillLinearGradientEndPoint={gradient?.end}
+                fillLinearGradientColorStops={gradient?.colorStops}
+                align={resolved.align}
+                lineHeight={resolved.line_height}
+                letterSpacing={resolved.letter_spacing}
+                verticalAlign="middle"
+                listening={editable}
+                onClick={() => {
+                  if (!editable) {
+                    return;
+                  }
+                  const shouldOpenEditor = !value.trim() || selectedTextId === field.text_id;
+                  onSelectText?.(field.text_id);
+                  if (shouldOpenEditor) {
+                    onStartTextEdit?.(field.text_id);
+                  }
+                }}
+                onTap={() => {
+                  if (!editable) {
+                    return;
+                  }
+                  const shouldOpenEditor = !value.trim() || selectedTextId === field.text_id;
+                  onSelectText?.(field.text_id);
+                  if (shouldOpenEditor) {
+                    onStartTextEdit?.(field.text_id);
+                  }
+                }}
+                onDblClick={() => (editable ? onStartTextEdit?.(field.text_id) : undefined)}
+                onDblTap={() => (editable ? onStartTextEdit?.(field.text_id) : undefined)}
+              />
+            )}
+          </Group>
         );
       })}
+      {editable ? <Transformer name="editor-guide" ref={transformerRef} rotateEnabled={false} /> : null}
     </>
   );
 }
@@ -284,8 +625,14 @@ export function FrameCanvas({
   selectedSlotId,
   textState,
   onSelectSlot,
+  onRequestSlotUpload,
   onAdjustmentsChange,
   onSwapSlots,
+  selectedTextId = null,
+  onSelectText,
+  onTextChange,
+  onTextBoxChange,
+  textEditable = false,
   stageRef,
   showGuides = true,
 }: {
@@ -294,14 +641,21 @@ export function FrameCanvas({
   textState: Record<number, EditorTextState>;
   selectedSlotId: number | null;
   onSelectSlot: (slotId: number) => void;
+  onRequestSlotUpload?: (slotId: number) => void;
   onAdjustmentsChange: (slotId: number, patch: Partial<SlotAdjustments>) => void;
   onSwapSlots: (fromSlotId: number, toSlotId: number) => void;
+  selectedTextId?: number | null;
+  onSelectText?: (textId: number | null) => void;
+  onTextChange?: (textId: number, value: string) => void;
+  onTextBoxChange?: (textId: number, patch: { x?: number; y?: number; width?: number; height?: number }) => void;
+  textEditable?: boolean;
   stageRef?: React.RefObject<Konva.Stage | null>;
   showGuides?: boolean;
 }) {
   const [frameImage] = useImage(frame.frame_asset_url, "anonymous");
   const [containerWidth, setContainerWidth] = useState(940);
   const [dragSourceSlot, setDragSourceSlot] = useState<number | null>(null);
+  const [editingTextId, setEditingTextId] = useState<number | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const localStageRef = useRef<Konva.Stage>(null);
   const sharedStageRef = stageRef ?? localStageRef;
@@ -321,19 +675,25 @@ export function FrameCanvas({
     return () => observer.disconnect();
   }, []);
 
+  const resolvedTextFields = useMemo(
+    () =>
+      frame.text_positions.map((field) => resolvedTextField(field, textState[field.text_id])),
+    [frame.text_positions, textState],
+  );
+
   const bounds = useMemo(() => {
     const x = Math.max(
       ...frame.slot_positions.map((slot) => slot.x + slot.width),
-      ...frame.text_positions.map((field) => field.x + field.width),
+      ...resolvedTextFields.map((field) => field.x + field.width),
       1200,
     );
     const y = Math.max(
       ...frame.slot_positions.map((slot) => slot.y + slot.height),
-      ...frame.text_positions.map((field) => field.y + field.height),
+      ...resolvedTextFields.map((field) => field.y + field.height),
       900,
     );
     return { width: x, height: y };
-  }, [frame.slot_positions, frame.text_positions]);
+  }, [frame.slot_positions, resolvedTextFields]);
 
   const baseWidth = frameImage?.width ?? bounds.width;
   const baseHeight = frameImage?.height ?? bounds.height;
@@ -352,17 +712,72 @@ export function FrameCanvas({
   const scale = stageWidth / baseWidth;
   const stageHeight = Math.max(280, baseHeight * scale);
 
+  const editingField = useMemo(() => {
+    if (!textEditable || editingTextId === null || selectedTextId !== editingTextId) {
+      return null;
+    }
+    const field = frame.text_positions.find((item) => item.text_id === editingTextId);
+    if (!field) {
+      return null;
+    }
+    const state = textState[field.text_id];
+    return resolvedTextField(field, state);
+  }, [editingTextId, frame.text_positions, selectedTextId, textEditable, textState]);
+
+  const beginInlineTextEdit = (textId: number) => {
+    if (!textEditable || !onTextChange) {
+      return;
+    }
+    onSelectText?.(textId);
+    setEditingTextId(textId);
+  };
+
+  const commitInlineTextEdit = () => {
+    setEditingTextId(null);
+  };
+
   return (
     <div
       ref={wrapperRef}
       className="surface w-full overflow-auto p-3 sm:p-5"
       onContextMenu={(event) => event.preventDefault()}
     >
-      <Stage ref={sharedStageRef} width={stageWidth} height={stageHeight}>
+      <div className="relative inline-block">
+      <Stage
+        ref={sharedStageRef}
+        width={stageWidth}
+        height={stageHeight}
+        onMouseDown={(event) => {
+          if (!textEditable || !onSelectText) {
+            return;
+          }
+          const isBackground =
+            event.target === event.target.getStage() || event.target.name() === "canvas-bg";
+          if (isBackground) {
+            if (editingTextId !== null) {
+              commitInlineTextEdit();
+            }
+            onSelectText(null);
+          }
+        }}
+        onTouchStart={(event) => {
+          if (!textEditable || !onSelectText) {
+            return;
+          }
+          const isBackground =
+            event.target === event.target.getStage() || event.target.name() === "canvas-bg";
+          if (isBackground) {
+            if (editingTextId !== null) {
+              commitInlineTextEdit();
+            }
+            onSelectText(null);
+          }
+        }}
+      >
         <Layer scaleX={scale} scaleY={scale}>
-          <Rect x={0} y={0} width={baseWidth} height={baseHeight} fill="#f5f5f4" />
+          <Rect name="canvas-bg" x={0} y={0} width={baseWidth} height={baseHeight} fill="#f5f5f4" />
 
-          {frame.slot_positions.map((slot) => {
+          {frame.slot_positions.map((slot, slotIndex) => {
             if (aboveFrameSlots.has(slot.slot_id)) {
               return null;
             }
@@ -371,8 +786,20 @@ export function FrameCanvas({
               <Group
                 key={slot.slot_id}
                 clipFunc={(ctx) => slotClipPath(ctx, slot)}
-                onClick={() => onSelectSlot(slot.slot_id)}
-                onTap={() => onSelectSlot(slot.slot_id)}
+                onClick={() => {
+                  onSelectSlot(slot.slot_id);
+                  if (!state?.image_url) {
+                    onRequestSlotUpload?.(slot.slot_id);
+                  }
+                }}
+                onTap={() => {
+                  onSelectSlot(slot.slot_id);
+                  if (!state?.image_url) {
+                    onRequestSlotUpload?.(slot.slot_id);
+                  }
+                }}
+                onDblClick={() => onRequestSlotUpload?.(slot.slot_id)}
+                onDblTap={() => onRequestSlotUpload?.(slot.slot_id)}
               >
                 {state?.image_url ? (
                   <SlotImage
@@ -399,7 +826,31 @@ export function FrameCanvas({
                       setDragSourceSlot(null);
                     }}
                   />
-                ) : null}
+                ) : (
+                  <>
+                    <Rect
+                      x={slot.x}
+                      y={slot.y}
+                      width={slot.width}
+                      height={slot.height}
+                      fill="rgba(255, 255, 255, 0.72)"
+                      stroke="#7c95b5"
+                      strokeWidth={2}
+                      dash={[8, 6]}
+                    />
+                    <KonvaText
+                      x={slot.x + 10}
+                      y={slot.y + slot.height / 2 - 14}
+                      width={Math.max(20, slot.width - 20)}
+                      text={slotPrompt(slot, slotIndex)}
+                      fontSize={15}
+                      fontStyle="bold"
+                      fontFamily={fontStack("Poppins")}
+                      fill="#1f4e8c"
+                      align="center"
+                    />
+                  </>
+                )}
               </Group>
             );
           })}
@@ -408,7 +859,7 @@ export function FrameCanvas({
             <KonvaImage image={frameImage} x={0} y={0} width={baseWidth} height={baseHeight} listening={false} />
           ) : null}
 
-          {frame.slot_positions.map((slot) => {
+          {frame.slot_positions.map((slot, slotIndex) => {
             if (!aboveFrameSlots.has(slot.slot_id)) {
               return null;
             }
@@ -417,8 +868,20 @@ export function FrameCanvas({
               <Group
                 key={`above-${slot.slot_id}`}
                 clipFunc={(ctx) => slotClipPath(ctx, slot)}
-                onClick={() => onSelectSlot(slot.slot_id)}
-                onTap={() => onSelectSlot(slot.slot_id)}
+                onClick={() => {
+                  onSelectSlot(slot.slot_id);
+                  if (!state?.image_url) {
+                    onRequestSlotUpload?.(slot.slot_id);
+                  }
+                }}
+                onTap={() => {
+                  onSelectSlot(slot.slot_id);
+                  if (!state?.image_url) {
+                    onRequestSlotUpload?.(slot.slot_id);
+                  }
+                }}
+                onDblClick={() => onRequestSlotUpload?.(slot.slot_id)}
+                onDblTap={() => onRequestSlotUpload?.(slot.slot_id)}
               >
                 {state?.image_url ? (
                   <SlotImage
@@ -445,21 +908,67 @@ export function FrameCanvas({
                       setDragSourceSlot(null);
                     }}
                   />
-                ) : null}
+                ) : (
+                  <>
+                    <Rect
+                      x={slot.x}
+                      y={slot.y}
+                      width={slot.width}
+                      height={slot.height}
+                      fill="rgba(255, 255, 255, 0.72)"
+                      stroke="#7c95b5"
+                      strokeWidth={2}
+                      dash={[8, 6]}
+                    />
+                    <KonvaText
+                      x={slot.x + 10}
+                      y={slot.y + slot.height / 2 - 14}
+                      width={Math.max(20, slot.width - 20)}
+                      text={slotPrompt(slot, slotIndex)}
+                      fontSize={15}
+                      fontStyle="bold"
+                      fontFamily={fontStack("Poppins")}
+                      fill="#1f4e8c"
+                      align="center"
+                    />
+                  </>
+                )}
               </Group>
             );
           })}
 
-          <TextLayer textPositions={frame.text_positions} textState={textState} />
+          <TextLayer
+            textPositions={frame.text_positions}
+            textState={textState}
+            editable={textEditable}
+            selectedTextId={selectedTextId}
+            onSelectText={onSelectText}
+            onTextBoxChange={onTextBoxChange}
+            onStartTextEdit={beginInlineTextEdit}
+          />
 
           {showGuides
-            ? frame.slot_positions.map((slot) => (
-                <Group
-                  key={`outline-${slot.slot_id}`}
-                  name="editor-guide"
-                  onClick={() => onSelectSlot(slot.slot_id)}
-                  onTap={() => onSelectSlot(slot.slot_id)}
-                >
+            ? frame.slot_positions.map((slot) => {
+                const hasImage = Boolean(slotState[slot.slot_id]?.image_url);
+                return (
+                  <Group
+                    key={`outline-${slot.slot_id}`}
+                    name="editor-guide"
+                    onClick={() => {
+                      onSelectSlot(slot.slot_id);
+                      if (!hasImage) {
+                        onRequestSlotUpload?.(slot.slot_id);
+                      }
+                    }}
+                    onTap={() => {
+                      onSelectSlot(slot.slot_id);
+                      if (!hasImage) {
+                        onRequestSlotUpload?.(slot.slot_id);
+                      }
+                    }}
+                    onDblClick={() => onRequestSlotUpload?.(slot.slot_id)}
+                    onDblTap={() => onRequestSlotUpload?.(slot.slot_id)}
+                  >
                   {slot.shape === "circle" ? (
                     <Circle
                       x={slot.x + slot.width / 2}
@@ -491,11 +1000,48 @@ export function FrameCanvas({
                       dash={selectedSlotId === slot.slot_id ? [] : [8, 8]}
                     />
                   )}
-                </Group>
-              ))
+                  </Group>
+                );
+              })
             : null}
         </Layer>
       </Stage>
+      {textEditable && editingField && onTextChange ? (
+        <textarea
+          autoFocus
+          value={textState[editingField.text_id]?.value ?? editingField.default_text ?? ""}
+          placeholder={editingField.placeholder || editingField.label || "Type text..."}
+          onChange={(event) => {
+            onTextChange(editingField.text_id, event.target.value);
+          }}
+          onBlur={commitInlineTextEdit}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              setEditingTextId(null);
+              return;
+            }
+            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+              event.preventDefault();
+              commitInlineTextEdit();
+            }
+          }}
+          className="absolute resize-none rounded-md border-2 border-amber-500 bg-white/95 p-1.5 text-sm text-stone-900 shadow-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+          style={{
+            left: `${editingField.x * scale}px`,
+            top: `${editingField.y * scale}px`,
+            width: `${Math.max(80, editingField.width * scale)}px`,
+            height: `${Math.max(36, editingField.height * scale)}px`,
+            fontSize: `${Math.max(10, editingField.font_size * scale)}px`,
+            fontFamily: fontStack(editingField.font_family),
+            fontWeight: editingField.font_weight,
+            lineHeight: String(editingField.line_height ?? 1.2),
+            letterSpacing: `${editingField.letter_spacing ?? 0}px`,
+            color: editingField.color,
+            textAlign: editingField.align,
+          }}
+        />
+      ) : null}
+      </div>
     </div>
   );
 }

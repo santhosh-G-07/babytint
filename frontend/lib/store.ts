@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+import { applyStyleToRange, clearStyleFromRange, remapRunsForTextChange } from "@/lib/rich-text";
 import type {
   CustomizationData,
   EditorTextState,
@@ -113,6 +114,21 @@ interface EditorStore {
   updateSlotAdjustments: (slotId: number, patch: Partial<SlotAdjustments>) => void;
   updateTextValue: (textId: number, value: string) => void;
   updateTextFont: (textId: number, font: Pick<EditorTextState, "font_family" | "font_weight">) => void;
+  updateTextStyle: (
+    textId: number,
+    patch: Partial<Omit<EditorTextState, "text_id" | "value">>,
+  ) => void;
+  styleTextRange: (
+    textId: number,
+    start: number,
+    end: number,
+    patch: Pick<EditorTextState, "font_family" | "font_weight" | "color" | "font_size">,
+  ) => void;
+  clearTextRangeStyle: (textId: number, start: number, end: number) => void;
+  updateTextBox: (
+    textId: number,
+    patch: Pick<Partial<EditorTextState>, "x" | "y" | "width" | "height">,
+  ) => void;
   swapSlots: (fromSlotId: number, toSlotId: number) => void;
   copySlotToSlot: (fromSlotId: number, toSlotId: number) => void;
   clearEditor: () => void;
@@ -143,6 +159,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           value: text.default_text ?? "",
           font_family: text.font_family,
           font_weight: text.font_weight,
+          x: text.x,
+          y: text.y,
+          width: text.width,
+          height: text.height,
+          font_size: text.font_size,
+          color: text.color,
+          align: text.align,
+          line_height: text.line_height ?? 1.2,
+          letter_spacing: text.letter_spacing ?? 0,
+          rich_runs: prevTexts[text.text_id]?.rich_runs ?? [],
         };
       }
       return {
@@ -183,26 +209,88 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       },
     })),
   updateTextValue: (textId, value) =>
-    set((state) => ({
-      texts: {
-        ...state.texts,
-        [textId]: {
-          text_id: textId,
-          value,
-          font_family: state.texts[textId]?.font_family,
-          font_weight: state.texts[textId]?.font_weight,
+    set((state) => {
+      const prev = state.texts[textId];
+      const prevValue = prev?.value ?? "";
+      const remappedRuns = remapRunsForTextChange(prevValue, value, prev?.rich_runs);
+      return {
+        texts: {
+          ...state.texts,
+          [textId]: {
+            ...(state.texts[textId] ?? { text_id: textId }),
+            value,
+            rich_runs: remappedRuns,
+          },
         },
-      },
-    })),
+      };
+    }),
   updateTextFont: (textId, font) =>
     set((state) => ({
       texts: {
         ...state.texts,
         [textId]: {
-          text_id: textId,
-          value: state.texts[textId]?.value ?? "",
+          ...(state.texts[textId] ?? { text_id: textId, value: "" }),
           font_family: font.font_family,
           font_weight: font.font_weight,
+        },
+      },
+    })),
+  updateTextStyle: (textId, patch) =>
+    set((state) => ({
+      texts: {
+        ...state.texts,
+        [textId]: {
+          ...(state.texts[textId] ?? { text_id: textId, value: "" }),
+          ...patch,
+        },
+      },
+    })),
+  styleTextRange: (textId, start, end, patch) =>
+    set((state) => {
+      const current = state.texts[textId] ?? { text_id: textId, value: "" };
+      const nextRuns = applyStyleToRange(
+        current.value ?? "",
+        current.rich_runs,
+        start,
+        end,
+        {
+          font_family: patch.font_family,
+          font_weight: patch.font_weight,
+          color: patch.color,
+          font_size: patch.font_size,
+        },
+      );
+      return {
+        texts: {
+          ...state.texts,
+          [textId]: {
+            ...current,
+            rich_runs: nextRuns,
+          },
+        },
+      };
+    }),
+  clearTextRangeStyle: (textId, start, end) =>
+    set((state) => {
+      const current = state.texts[textId] ?? { text_id: textId, value: "" };
+      const nextRuns = clearStyleFromRange(current.value ?? "", current.rich_runs, start, end);
+      return {
+        texts: {
+          ...state.texts,
+          [textId]: {
+            ...current,
+            rich_runs: nextRuns,
+          },
+        },
+      };
+    }),
+  updateTextBox: (textId, patch) =>
+    set((state) => ({
+      texts: {
+        ...state.texts,
+        [textId]: {
+          ...(state.texts[textId] ?? { text_id: textId, value: "" }),
+          ...patch,
         },
       },
     })),
