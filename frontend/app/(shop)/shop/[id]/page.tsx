@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import Script from "next/script";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, BadgeCheck, Frame, ShieldCheck, Star, Truck } from "lucide-react";
@@ -140,10 +141,9 @@ export default function FrameDetailPage() {
 
   return (
     <div className="container-shell py-8 sm:py-10">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
-      />
+      <Script id="product-jsonld" type="application/ld+json" strategy="afterInteractive">
+        {JSON.stringify(productJsonLd)}
+      </Script>
       <div className="grid gap-8 lg:grid-cols-2">
         <div className="relative aspect-square overflow-hidden rounded-3xl border border-stone-200 bg-gradient-to-br from-stone-50 to-amber-50 dark:border-stone-800 dark:from-stone-900 dark:to-stone-900">
           <Image

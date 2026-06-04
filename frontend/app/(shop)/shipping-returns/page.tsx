@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Shipping & Returns",
@@ -42,7 +43,11 @@ export default function ShippingReturnsPage() {
 
       <section className="mt-6 rounded-2xl border border-stone-200 bg-stone-50 p-5 text-sm text-stone-600 dark:border-stone-800 dark:bg-stone-900/60 dark:text-stone-300">
         Policy note: Final replacement and refund decisions depend on verification of issue details
-        and courier status.
+        and courier status. You can also review the dedicated{" "}
+        <Link className="font-medium text-amber-700" href="/cancellation-refund">
+          Cancellation & Refund
+        </Link>{" "}
+        page.
       </section>
     </div>
   );

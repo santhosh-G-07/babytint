@@ -1,3 +1,9 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 /** @type {import('next').RemotePattern[]} */
 function configuredImageHosts() {
   const urls = [
@@ -36,6 +42,7 @@ function configuredImageHosts() {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   allowedDevOrigins: ["127.0.0.1", "localhost"],
+  outputFileTracingRoot: path.join(__dirname, ".."),
   images: {
     dangerouslyAllowLocalIP: process.env.NODE_ENV !== "production",
     remotePatterns: configuredImageHosts(),

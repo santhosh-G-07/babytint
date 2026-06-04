@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Konva from "konva";
 import { X } from "lucide-react";
@@ -10,7 +10,6 @@ import { toast } from "sonner";
 
 import { EditorToolbar } from "@/components/editor/EditorToolbar";
 import { PhotoCropperSheet, type CropSelection } from "@/components/editor/PhotoCropperSheet";
-import { TextEditor } from "@/components/editor/TextEditor";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { addServerCartItem, authMe, getFrame, uploadImage } from "@/lib/api";
@@ -94,7 +93,10 @@ const FrameCanvas = dynamic(
 export default function EditorPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const stageRef = useRef<Konva.Stage>(null);
+  const editorInitKeyRef = useRef<string | null>(null);
+  const loadedCartItemIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingSlotIdRef = useRef<number | null>(null);
   const [savingComposite, setSavingComposite] = useState(false);
@@ -102,6 +104,7 @@ export default function EditorPage() {
   const [cropTask, setCropTask] = useState<CropTask | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedTextId, setSelectedTextId] = useState<number | null>(null);
+  const cartItemIdFromQuery = searchParams.get("cart_item");
 
   const frameRef = params.id;
   const { data: frame, isLoading, error } = useQuery({
@@ -116,27 +119,50 @@ export default function EditorPage() {
     slots,
     texts,
     initializeFrame,
+    clearEditor,
+    loadCustomization,
     selectSlot,
     setSlotImage,
     updateSlotAdjustments,
     updateTextValue,
-    updateTextFont,
-    updateTextStyle,
-    styleTextRange,
-    clearTextRangeStyle,
     updateTextBox,
     swapSlots,
     toCustomizationData,
   } = useEditorStore();
 
+  const cartItems = useCartStore((state) => state.cart);
   const addToCart = useCartStore((state) => state.addToCart);
 
   useEffect(() => {
     if (!frame) {
       return;
     }
+    const initKey = `${frame.id}:${cartItemIdFromQuery ?? "new"}`;
+    if (editorInitKeyRef.current === initKey) {
+      return;
+    }
+    editorInitKeyRef.current = initKey;
+
+    loadedCartItemIdRef.current = null;
+    if (!cartItemIdFromQuery) {
+      clearEditor();
+    }
     initializeFrame(frame.id, frame.slot_positions.map((slot) => slot.slot_id), frame.text_positions);
-  }, [frame, initializeFrame]);
+  }, [cartItemIdFromQuery, clearEditor, frame, initializeFrame]);
+
+  useEffect(() => {
+    if (!frame || !cartItemIdFromQuery || loadedCartItemIdRef.current === cartItemIdFromQuery) {
+      return;
+    }
+    const cartItem = cartItems.find(
+      (item) => item.id === cartItemIdFromQuery && item.frame.id === frame.id,
+    );
+    if (!cartItem) {
+      return;
+    }
+    loadCustomization(cartItem.customization);
+    loadedCartItemIdRef.current = cartItemIdFromQuery;
+  }, [cartItemIdFromQuery, cartItems, frame, loadCustomization]);
 
   useEffect(() => {
     return () => {
@@ -386,7 +412,7 @@ export default function EditorPage() {
           addToCartBusy={savingComposite}
         />
 
-        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+        <div className="grid gap-4">
           <FrameCanvas
             frame={frame}
             slotState={slots}
@@ -407,19 +433,6 @@ export default function EditorPage() {
             stageRef={stageRef}
             showGuides={false}
           />
-          <div className="space-y-4">
-            <TextEditor
-              textPositions={frame.text_positions}
-              textState={texts}
-              selectedTextId={selectedTextId}
-              onSelectText={setSelectedTextId}
-              onTextChange={updateTextValue}
-              onFontChange={updateTextFont}
-              onStyleChange={updateTextStyle}
-              onRangeStyle={styleTextRange}
-              onClearRangeStyle={clearTextRangeStyle}
-            />
-          </div>
         </div>
       </div>
 
@@ -456,14 +469,20 @@ export default function EditorPage() {
             >
               <X className="h-4 w-4" />
             </Button>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={previewUrl}
-              alt="Frame preview"
-              draggable={false}
-              className="mx-auto max-h-[84vh] w-full select-none rounded-xl object-contain"
-              onContextMenu={(event) => event.preventDefault()}
-            />
+            <div className="mx-auto flex max-h-[84vh] w-full items-center justify-center overflow-auto rounded-xl bg-stone-200/70 p-5 dark:bg-stone-800/60">
+              <div className="rounded-[10px] bg-[#f3f3f3] p-3 shadow-[0_26px_42px_-26px_rgba(0,0,0,0.7)]">
+                <div className="rounded-[3px] border-[12px] border-white bg-white shadow-inner sm:border-[14px]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={previewUrl}
+                    alt="Frame preview"
+                    draggable={false}
+                    className="block max-h-[74vh] max-w-full select-none object-contain"
+                    onContextMenu={(event) => event.preventDefault()}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       ) : null}

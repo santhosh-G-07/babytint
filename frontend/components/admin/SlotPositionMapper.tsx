@@ -17,6 +17,7 @@ import { ImageIcon, Plus, Trash2, Type } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -367,6 +368,8 @@ export function SlotPositionMapper({
               gradient_to: "#92400e",
               gradient_angle: 0,
               align: "center",
+              line_height: 1.2,
+              letter_spacing: 0,
               allow_customer_font: true,
             };
             onTextChange([...textPositions, created]);
@@ -631,6 +634,8 @@ export function SlotPositionMapper({
                     fontFamily={fontStack(field.font_family)}
                     fontStyle={field.font_weight === "bold" ? "bold" : "normal"}
                     align={field.align}
+                    lineHeight={field.line_height ?? 1.2}
+                    letterSpacing={field.letter_spacing ?? 0}
                     verticalAlign="middle"
                     listening={false}
                   />
@@ -683,13 +688,13 @@ export function SlotPositionMapper({
         </div>
       ) : null}
 
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
         {slots.map((slot) => {
           const selected = effectiveSelection?.type === "slot" && effectiveSelection.id === slot.slot_id;
           return (
             <div
               key={`meta-${slot.slot_id}`}
-              className={`rounded-lg border p-2 ${
+              className={`rounded-xl border p-3 ${
                 selected
                   ? "border-amber-600 bg-amber-50/60 dark:border-amber-500 dark:bg-amber-900/20"
                   : "border-stone-200 dark:border-stone-800"
@@ -697,47 +702,59 @@ export function SlotPositionMapper({
             >
               <button
                 type="button"
-                className="text-sm font-medium"
+                className="w-full text-left text-sm font-semibold"
                 onClick={() => setSelection({ type: "slot", id: slot.slot_id })}
               >
                 Slot {slot.slot_id}
               </button>
-              <Input
-                className="mt-2 h-8"
-                value={slot.label ?? ""}
-                placeholder="Baby / Parents"
-                onChange={(event) => updateSlot(slot.slot_id, { label: event.target.value })}
-              />
-              <Select
-                value={slot.shape}
-                onValueChange={(nextShape: SlotPosition["shape"]) => {
-                  const nextPoints =
-                    nextShape === "free"
-                      ? slot.shape === "free"
-                        ? pointsForSlot(slot)
-                        : defaultPointsForShape("free")
-                      : nextShape === "diamond"
-                        ? defaultPointsForShape("diamond")
-                        : nextShape === "hexagon"
-                          ? defaultPointsForShape("hexagon")
-                          : null;
-                  updateSlot(slot.slot_id, {
-                    shape: nextShape,
-                    points: nextPoints,
-                  });
-                }}
-              >
-                <SelectTrigger className="mt-2 h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="rect">rect</SelectItem>
-                  <SelectItem value="circle">circle</SelectItem>
-                  <SelectItem value="diamond">diamond</SelectItem>
-                  <SelectItem value="hexagon">hexagon</SelectItem>
-                  <SelectItem value="free">free shape</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="mt-3 space-y-2.5">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                    Slot Label
+                  </p>
+                  <Input
+                    className="h-9"
+                    value={slot.label ?? ""}
+                    placeholder="Baby / Parents"
+                    onChange={(event) => updateSlot(slot.slot_id, { label: event.target.value })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                    Shape
+                  </p>
+                  <Select
+                    value={slot.shape}
+                    onValueChange={(nextShape: SlotPosition["shape"]) => {
+                      const nextPoints =
+                        nextShape === "free"
+                          ? slot.shape === "free"
+                            ? pointsForSlot(slot)
+                            : defaultPointsForShape("free")
+                          : nextShape === "diamond"
+                            ? defaultPointsForShape("diamond")
+                            : nextShape === "hexagon"
+                              ? defaultPointsForShape("hexagon")
+                              : null;
+                      updateSlot(slot.slot_id, {
+                        shape: nextShape,
+                        points: nextPoints,
+                      });
+                    }}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="rect">rect</SelectItem>
+                      <SelectItem value="circle">circle</SelectItem>
+                      <SelectItem value="diamond">diamond</SelectItem>
+                      <SelectItem value="hexagon">hexagon</SelectItem>
+                      <SelectItem value="free">free shape</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
           );
         })}
@@ -748,7 +765,7 @@ export function SlotPositionMapper({
           return (
             <div
               key={`text-meta-${field.text_id}`}
-              className={`rounded-lg border p-2 ${
+              className={`rounded-xl border p-3 ${
                 selected
                   ? "border-amber-600 bg-amber-50/60 dark:border-amber-500 dark:bg-amber-900/20"
                   : "border-stone-200 dark:border-stone-800"
@@ -756,80 +773,105 @@ export function SlotPositionMapper({
             >
               <button
                 type="button"
-                className="text-sm font-medium"
+                className="w-full text-left text-sm font-semibold"
                 onClick={() => setSelection({ type: "text", id: field.text_id })}
               >
                 Text {field.text_id}
               </button>
-              <div className="mt-2 grid gap-2">
-                <Input
-                  className="h-8"
-                  value={field.label}
-                  onChange={(event) => updateText(field.text_id, { label: event.target.value })}
-                />
-                <Input
-                  className="h-8"
-                  value={field.placeholder ?? ""}
-                  placeholder="Placeholder"
-                  onChange={(event) => updateText(field.text_id, { placeholder: event.target.value })}
-                />
-                <Input
-                  className="h-8"
-                  value={field.default_text ?? ""}
-                  placeholder="Default text"
-                  onChange={(event) => updateText(field.text_id, { default_text: event.target.value })}
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <Select
-                    value={field.font_group}
-                    onValueChange={(fontGroup: TextFontGroup) => {
-                      const defaultFont = frameFontGroups[fontGroup][0];
-                      updateText(field.text_id, {
-                        font_group: fontGroup,
-                        font_family: defaultFont.family,
-                        font_weight: defaultFont.weight,
-                      });
-                    }}
-                  >
-                    <SelectTrigger className="h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="name">name</SelectItem>
-                      <SelectItem value="numbers">numbers</SelectItem>
-                      <SelectItem value="details">details</SelectItem>
-                      <SelectItem value="general">general</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select
-                    value={fontOptionValue({ family: field.font_family, weight: field.font_weight })}
-                    onValueChange={(value) => {
-                      const parsed = parseFontOption(value);
-                      updateText(field.text_id, {
-                        font_family: parsed.family,
-                        font_weight: parsed.weight,
-                      });
-                    }}
-                  >
-                    <SelectTrigger className="h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {fontOptions.map((option) => (
-                        <SelectItem key={fontOptionValue(option)} value={fontOptionValue(option)}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="mt-3 space-y-2.5">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                    Text Label
+                  </p>
+                  <Input
+                    className="h-9"
+                    value={field.label}
+                    onChange={(event) => updateText(field.text_id, { label: event.target.value })}
+                  />
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                    Placeholder
+                  </p>
+                  <Input
+                    className="h-9"
+                    value={field.placeholder ?? ""}
+                    placeholder="Placeholder"
+                    onChange={(event) => updateText(field.text_id, { placeholder: event.target.value })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                    Default Text
+                  </p>
+                  <Textarea
+                    className="min-h-[88px] p-2 text-sm"
+                    value={field.default_text ?? ""}
+                    placeholder="Default text"
+                    onChange={(event) => updateText(field.text_id, { default_text: event.target.value })}
+                  />
+                </div>
+                <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]">
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                      Font Group
+                    </p>
+                    <Select
+                      value={field.font_group}
+                      onValueChange={(fontGroup: TextFontGroup) => {
+                        const defaultFont = frameFontGroups[fontGroup][0];
+                        updateText(field.text_id, {
+                          font_group: fontGroup,
+                          font_family: defaultFont.family,
+                          font_weight: defaultFont.weight,
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="name">name</SelectItem>
+                        <SelectItem value="numbers">numbers</SelectItem>
+                        <SelectItem value="details">details</SelectItem>
+                        <SelectItem value="general">general</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                      Font Style
+                    </p>
+                    <Select
+                      value={fontOptionValue({ family: field.font_family, weight: field.font_weight })}
+                      onValueChange={(value) => {
+                        const parsed = parseFontOption(value);
+                        updateText(field.text_id, {
+                          font_family: parsed.family,
+                          font_weight: parsed.weight,
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {fontOptions.map((option) => (
+                          <SelectItem key={fontOptionValue(option)} value={fontOptionValue(option)}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(128px,1fr))]">
                   <div className="space-y-1">
                     <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
                       Font Size
                     </p>
                     <Input
-                      className="h-8"
+                      className="h-9"
                       type="number"
                       min={8}
                       max={320}
@@ -842,16 +884,50 @@ export function SlotPositionMapper({
                   </div>
                   <div className="space-y-1">
                     <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                      Line Height
+                    </p>
+                    <Input
+                      className="h-9"
+                      type="number"
+                      min={0.8}
+                      max={3}
+                      step={0.05}
+                      value={field.line_height ?? 1.2}
+                      onChange={(event) =>
+                        updateText(field.text_id, {
+                          line_height: Math.max(0.8, Math.min(3, Number(event.target.value) || 1.2)),
+                        })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                      Letter Spacing
+                    </p>
+                    <Input
+                      className="h-9"
+                      type="number"
+                      min={-2}
+                      max={40}
+                      step={0.25}
+                      value={field.letter_spacing ?? 0}
+                      onChange={(event) =>
+                        updateText(field.text_id, {
+                          letter_spacing: Math.max(-2, Math.min(40, Number(event.target.value) || 0)),
+                        })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
                       Font Color
                     </p>
                     <Input
-                      className="h-8 p-1"
+                      className="h-9 p-1"
                       type="color"
                       value={field.color}
                       onChange={(event) => updateText(field.text_id, { color: event.target.value })}
                     />
                   </div>
-                  <div className="space-y-1 sm:col-span-2">
+                  <div className="space-y-1 [grid-column:1/-1]">
                     <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
                       Alignment
                     </p>
@@ -859,7 +935,7 @@ export function SlotPositionMapper({
                       value={field.align}
                       onValueChange={(align: TextAlign) => updateText(field.text_id, { align })}
                     >
-                      <SelectTrigger className="h-8">
+                      <SelectTrigger className="h-9">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -870,8 +946,9 @@ export function SlotPositionMapper({
                     </Select>
                   </div>
                 </div>
-                <label className="flex items-center gap-2 text-xs text-stone-600 dark:text-stone-300">
+                <label className="flex items-center gap-2 rounded-md border border-stone-200 bg-white px-2 py-1.5 text-xs text-stone-700 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300">
                   <input
+                    className="h-3.5 w-3.5"
                     type="checkbox"
                     checked={field.gradient_enabled ?? false}
                     onChange={(event) =>
@@ -885,13 +962,13 @@ export function SlotPositionMapper({
                   Use gradient fill
                 </label>
                 {field.gradient_enabled ? (
-                  <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(110px,1fr))]">
                     <div className="space-y-1">
                       <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
                         Start
                       </p>
                       <Input
-                        className="h-8 p-1"
+                        className="h-9 p-1"
                         type="color"
                         value={field.gradient_from ?? field.color}
                         onChange={(event) => updateText(field.text_id, { gradient_from: event.target.value })}
@@ -902,7 +979,7 @@ export function SlotPositionMapper({
                         End
                       </p>
                       <Input
-                        className="h-8 p-1"
+                        className="h-9 p-1"
                         type="color"
                         value={field.gradient_to ?? "#92400e"}
                         onChange={(event) => updateText(field.text_id, { gradient_to: event.target.value })}
@@ -913,7 +990,7 @@ export function SlotPositionMapper({
                         Angle
                       </p>
                       <Input
-                        className="h-8"
+                        className="h-9"
                         type="number"
                         min={-360}
                         max={360}
@@ -926,8 +1003,9 @@ export function SlotPositionMapper({
                     </div>
                   </div>
                 ) : null}
-                <label className="flex items-center gap-2 text-xs text-stone-600 dark:text-stone-300">
+                <label className="flex items-center gap-2 rounded-md border border-stone-200 bg-white px-2 py-1.5 text-xs text-stone-700 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300">
                   <input
+                    className="h-3.5 w-3.5"
                     type="checkbox"
                     checked={field.allow_customer_font ?? true}
                     onChange={(event) => updateText(field.text_id, { allow_customer_font: event.target.checked })}

@@ -129,6 +129,7 @@ interface EditorStore {
     textId: number,
     patch: Pick<Partial<EditorTextState>, "x" | "y" | "width" | "height">,
   ) => void;
+  loadCustomization: (customization: CustomizationData) => void;
   swapSlots: (fromSlotId: number, toSlotId: number) => void;
   copySlotToSlot: (fromSlotId: number, toSlotId: number) => void;
   clearEditor: () => void;
@@ -294,6 +295,48 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         },
       },
     })),
+  loadCustomization: (customization) =>
+    set((state) => {
+      if (!customization.frame_id) {
+        return {};
+      }
+      const nextSlots = { ...state.slots };
+      for (const slot of customization.slots ?? []) {
+        nextSlots[slot.slot_id] = {
+          slot_id: slot.slot_id,
+          image_url: slot.image_url,
+          adjustments: {
+            ...defaultAdjustments,
+            ...slot.adjustments,
+          },
+        };
+      }
+      const nextTexts = { ...state.texts };
+      for (const text of customization.texts ?? []) {
+        const previous = nextTexts[text.text_id] ?? { text_id: text.text_id, value: "" };
+        nextTexts[text.text_id] = {
+          ...previous,
+          value: text.value ?? previous.value ?? "",
+          font_family: text.font_family ?? previous.font_family,
+          font_weight: text.font_weight ?? previous.font_weight,
+          x: text.x ?? previous.x,
+          y: text.y ?? previous.y,
+          width: text.width ?? previous.width,
+          height: text.height ?? previous.height,
+          font_size: text.font_size ?? previous.font_size,
+          color: text.color ?? previous.color,
+          align: text.align ?? previous.align,
+          line_height: text.line_height ?? previous.line_height,
+          letter_spacing: text.letter_spacing ?? previous.letter_spacing,
+          rich_runs: text.rich_runs ?? previous.rich_runs ?? [],
+        };
+      }
+      return {
+        frameId: customization.frame_id,
+        slots: nextSlots,
+        texts: nextTexts,
+      };
+    }),
   swapSlots: (fromSlotId, toSlotId) =>
     set((state) => {
       const from = state.slots[fromSlotId];

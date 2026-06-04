@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-import { addServerCartItem, getFrame, listServerCart, removeServerCartItem } from "@/lib/api";
+import { addServerCartItem, ApiError, getFrame, listServerCart, removeServerCartItem } from "@/lib/api";
 import { hasAuthToken } from "@/lib/local-admin-auth";
 import { useCartStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
@@ -20,6 +20,7 @@ function normalizeCustomization(frameId: string, raw: unknown): CustomizationDat
   if (raw && typeof raw === "object") {
     const value = raw as Record<string, unknown>;
     const slots = Array.isArray(value.slots) ? value.slots : [];
+    const texts = Array.isArray(value.texts) ? value.texts : undefined;
     const normalizedFrameId = typeof value.frame_id === "string" ? value.frame_id : frameId;
     const compositePreviewUrl =
       typeof value.composite_preview_url === "string"
@@ -33,6 +34,7 @@ function normalizeCustomization(frameId: string, raw: unknown): CustomizationDat
     return {
       frame_id: normalizedFrameId,
       slots: slots as CustomizationData["slots"],
+      texts: texts as CustomizationData["texts"],
       composite_preview_url: compositePreviewUrl,
       composite_export_meta: compositeMeta,
     };
@@ -48,9 +50,24 @@ export function CartSync() {
   const syncBusyRef = useRef(false);
   const hydratedForSessionRef = useRef<string | null>(null);
   const lastSyncedSignatureRef = useRef<string>("");
+  const previousLocalKeysRef = useRef<Set<string> | null>(null);
+  const locallyDeletedKeysRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let active = true;
+
+    const currentLocalKeys = new Set(cart.map(localKey));
+    if (previousLocalKeysRef.current) {
+      for (const previousKey of previousLocalKeysRef.current) {
+        if (!currentLocalKeys.has(previousKey)) {
+          locallyDeletedKeysRef.current.add(previousKey);
+        }
+      }
+    }
+    for (const currentKey of currentLocalKeys) {
+      locallyDeletedKeysRef.current.delete(currentKey);
+    }
+    previousLocalKeysRef.current = currentLocalKeys;
 
     const sync = async () => {
       if (!active || syncBusyRef.current) {
@@ -72,13 +89,14 @@ export function CartSync() {
           .sort((a, b) => a.frameId.localeCompare(b.frameId)),
       );
       if (
-          hydratedForSessionRef.current === (session?.user.id ?? "local") &&
+        hydratedForSessionRef.current === (session?.user.id ?? "local") &&
         lastSyncedSignatureRef.current === localSignature
       ) {
         return;
       }
 
       syncBusyRef.current = true;
+      const authKey = session?.user.id ?? "local";
       try {
         const serverItems = await listServerCart();
 
@@ -88,7 +106,7 @@ export function CartSync() {
           const localKeys = new Set(useCartStore.getState().cart.map(localKey));
           for (const serverItem of serverItems) {
             const key = serverKey(serverItem.frame_id, serverItem.customization_data);
-            if (localKeys.has(key)) {
+            if (localKeys.has(key) || locallyDeletedKeysRef.current.has(key)) {
               continue;
             }
             try {
@@ -121,6 +139,7 @@ export function CartSync() {
           if (!desiredKeys.has(key)) {
             try {
               await removeServerCartItem(item.id);
+              locallyDeletedKeysRef.current.delete(key);
             } catch {
               // Best-effort cleanup.
             }
@@ -130,7 +149,7 @@ export function CartSync() {
         // Add missing server items from local cart.
         for (const item of latestLocalCart) {
           const key = localKey(item);
-          if (!serverByKey.has(key)) {
+          if (!serverByKey.has(key) && !locallyDeletedKeysRef.current.has(key)) {
             try {
               await addServerCartItem({
                 frame_id: item.frame.id,
@@ -143,7 +162,24 @@ export function CartSync() {
         }
 
         hydratedForSessionRef.current = session?.user.id ?? "local";
-        lastSyncedSignatureRef.current = localSignature;
+        lastSyncedSignatureRef.current = JSON.stringify(
+          useCartStore
+            .getState()
+            .cart.map((item) => ({ frameId: item.frame.id, customization: item.customization }))
+            .sort((a, b) => a.frameId.localeCompare(b.frameId)),
+        );
+      } catch (error) {
+        if (error instanceof ApiError) {
+          const isAuthProviderMissing = /Authentication provider is not configured/i.test(error.message);
+          if (isAuthProviderMissing) {
+            // Backend auth provider is disabled/missing: keep local cart working without hard-failing UI.
+            hydratedForSessionRef.current = authKey;
+            lastSyncedSignatureRef.current = localSignature;
+            return;
+          }
+        }
+        // Prevent runtime crash from sync failures (network/downstream/backend).
+        console.warn("Cart sync skipped:", error);
       } finally {
         syncBusyRef.current = false;
       }
@@ -153,6 +189,8 @@ export function CartSync() {
     const { data: listener } = supabase.auth.onAuthStateChange(() => {
       hydratedForSessionRef.current = null;
       lastSyncedSignatureRef.current = "";
+      previousLocalKeysRef.current = null;
+      locallyDeletedKeysRef.current.clear();
       void sync();
     });
 

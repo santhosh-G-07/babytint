@@ -253,9 +253,245 @@ def _load_font(family: str, size: int, weight: str) -> ImageFont.FreeTypeFont | 
         return ImageFont.load_default()
 
 
-def _text_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont) -> int:
-    bbox = draw.textbbox((0, 0), text, font=font)
-    return int(bbox[2] - bbox[0])
+def _text_width(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    letter_spacing: float = 0.0,
+) -> int:
+    if not text:
+        return 0
+    if abs(letter_spacing) < 0.01:
+        bbox = draw.textbbox((0, 0), text, font=font)
+        return int(bbox[2] - bbox[0])
+
+    width = 0.0
+    for index, char in enumerate(text):
+        bbox = draw.textbbox((0, 0), char, font=font)
+        width += float(bbox[2] - bbox[0])
+        if index < len(text) - 1:
+            width += letter_spacing
+    return int(round(width))
+
+
+def _draw_spaced_text(
+    draw: ImageDraw.ImageDraw,
+    xy: tuple[int, int],
+    text: str,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    fill: tuple[int, int, int, int] | int,
+    letter_spacing: float = 0.0,
+) -> None:
+    if abs(letter_spacing) < 0.01:
+        draw.text(xy, text, fill=fill, font=font)
+        return
+
+    cursor_x = float(xy[0])
+    cursor_y = int(xy[1])
+    for index, char in enumerate(text):
+        draw.text((int(round(cursor_x)), cursor_y), char, fill=fill, font=font)
+        bbox = draw.textbbox((0, 0), char, font=font)
+        char_width = float(bbox[2] - bbox[0])
+        cursor_x += char_width
+        if index < len(text) - 1:
+            cursor_x += letter_spacing
+
+
+def _parse_rich_runs(raw_runs: object, text_length: int) -> list[dict]:
+    runs: list[dict] = []
+    if not isinstance(raw_runs, list):
+        return runs
+
+    for item in raw_runs:
+        if not isinstance(item, dict):
+            continue
+        try:
+            start = int(float(item.get("start", 0)))
+            end = int(float(item.get("end", 0)))
+        except (TypeError, ValueError):
+            continue
+
+        start = max(0, min(text_length, start))
+        end = max(0, min(text_length, end))
+        if end <= start:
+            continue
+
+        family = str(item.get("font_family", "")).strip()
+        color = str(item.get("color", "")).strip()
+        weight_raw = str(item.get("font_weight", "normal")).strip().lower()
+        weight = "bold" if weight_raw == "bold" else "normal"
+
+        font_size = None
+        if item.get("font_size") is not None:
+            try:
+                font_size = max(1, int(float(item.get("font_size"))))
+            except (TypeError, ValueError):
+                font_size = None
+
+        run: dict[str, object] = {"start": start, "end": end}
+        if family:
+            run["font_family"] = family
+        run["font_weight"] = weight
+        if color:
+            run["color"] = color
+        if font_size is not None:
+            run["font_size"] = font_size
+        runs.append(run)
+
+    return runs
+
+
+def _build_rich_char_styles(
+    value: str,
+    base_family: str,
+    base_weight: str,
+    base_size: int,
+    base_color: str,
+    rich_runs: list[dict],
+) -> list[dict]:
+    styles: list[dict] = [
+        {
+            "font_family": base_family,
+            "font_weight": "bold" if str(base_weight).lower() == "bold" else "normal",
+            "font_size": max(1, int(base_size)),
+            "color": base_color,
+        }
+        for _ in value
+    ]
+
+    for run in rich_runs:
+        start = int(run.get("start", 0))
+        end = int(run.get("end", 0))
+        for index in range(start, end):
+            cell = styles[index]
+            if isinstance(run.get("font_family"), str) and run.get("font_family"):
+                cell["font_family"] = run["font_family"]
+            if run.get("font_weight") in {"normal", "bold"}:
+                cell["font_weight"] = run["font_weight"]
+            if isinstance(run.get("color"), str) and run.get("color"):
+                cell["color"] = run["color"]
+            if isinstance(run.get("font_size"), int):
+                cell["font_size"] = max(1, int(run["font_size"]))
+
+    return styles
+
+
+def _rich_char_width(
+    draw: ImageDraw.ImageDraw,
+    char: str,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+) -> float:
+    bbox = draw.textbbox((0, 0), char, font=font)
+    width = float(bbox[2] - bbox[0])
+    if width > 0:
+        return width
+    if char == " ":
+        space_bbox = draw.textbbox((0, 0), " ", font=font)
+        space_width = float(space_bbox[2] - space_bbox[0])
+        if space_width > 0:
+            return space_width
+    return 0.0
+
+
+def _draw_rich_text_positions(
+    draw: ImageDraw.ImageDraw,
+    *,
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+    value: str,
+    align: str,
+    line_height_ratio: float,
+    letter_spacing: float,
+    base_family: str,
+    base_weight: str,
+    base_size: int,
+    base_color: str,
+    rich_runs: list[dict],
+) -> None:
+    if not value:
+        return
+
+    char_styles = _build_rich_char_styles(
+        value=value,
+        base_family=base_family,
+        base_weight=base_weight,
+        base_size=base_size,
+        base_color=base_color,
+        rich_runs=rich_runs,
+    )
+
+    font_cache: dict[tuple[str, int, str], ImageFont.FreeTypeFont | ImageFont.ImageFont] = {}
+
+    def resolve_font(style: dict) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+        key = (
+            str(style["font_family"]),
+            int(style["font_size"]),
+            "bold" if str(style["font_weight"]).lower() == "bold" else "normal",
+        )
+        if key not in font_cache:
+            font_cache[key] = _load_font(key[0], key[1], key[2])
+        return font_cache[key]
+
+    lines: list[dict] = []
+    line = {"glyphs": [], "width": 0.0, "max_font": 1}
+
+    def push_line() -> None:
+        nonlocal line
+        lines.append(line)
+        line = {"glyphs": [], "width": 0.0, "max_font": 1}
+
+    for index, char in enumerate(value):
+        if char == "\r":
+            continue
+        if char == "\n":
+            push_line()
+            continue
+
+        style = char_styles[index]
+        font = resolve_font(style)
+        char_width = _rich_char_width(draw, char, font)
+        prefix_spacing = letter_spacing if line["glyphs"] else 0.0
+        candidate_width = float(line["width"]) + prefix_spacing + char_width
+
+        if line["glyphs"] and candidate_width > float(width):
+            push_line()
+            prefix_spacing = 0.0
+            candidate_width = char_width
+
+        glyph_x = float(line["width"]) + prefix_spacing
+        line["glyphs"].append({"char": char, "x": glyph_x, "style": style})
+        line["width"] = candidate_width
+        line["max_font"] = max(int(line["max_font"]), int(style["font_size"]))
+
+    push_line()
+
+    line_heights = [max(1, int(round(int(item["max_font"]) * line_height_ratio))) for item in lines]
+    total_height = sum(line_heights)
+    cursor_y = max(0.0, (float(height) - float(total_height)) / 2.0)
+
+    for index, current in enumerate(lines):
+        visual_width = float(current["width"])
+        if align == "right":
+            offset_x = max(0.0, float(width) - visual_width)
+        elif align == "center":
+            offset_x = max(0.0, (float(width) - visual_width) / 2.0)
+        else:
+            offset_x = 0.0
+
+        for glyph in current["glyphs"]:
+            style = glyph["style"]
+            font = resolve_font(style)
+            fill = _parse_color(str(style["color"]))
+            draw.text(
+                (x + int(round(offset_x + float(glyph["x"]))), y + int(round(cursor_y))),
+                str(glyph["char"]),
+                font=font,
+                fill=fill,
+            )
+
+        cursor_y += float(line_heights[index])
 
 
 def _wrap_text(
@@ -263,6 +499,7 @@ def _wrap_text(
     text: str,
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
     max_width: int,
+    letter_spacing: float = 0.0,
 ) -> list[str]:
     lines: list[str] = []
     for raw_line in text.splitlines() or [text]:
@@ -274,7 +511,7 @@ def _wrap_text(
         current = words[0]
         for word in words[1:]:
             candidate = f"{current} {word}"
-            if _text_width(draw, candidate, font) <= max_width:
+            if _text_width(draw, candidate, font, letter_spacing) <= max_width:
                 current = candidate
             else:
                 lines.append(current)
@@ -353,33 +590,75 @@ def _draw_text_positions(
         if not value:
             continue
 
-        x = int(text_shape.get("x", 0))
-        y = int(text_shape.get("y", 0))
-        width = max(1, int(text_shape.get("width", 1)))
-        height = max(1, int(text_shape.get("height", 1)))
+        try:
+            x = int(float(override.get("x", text_shape.get("x", 0))))
+        except (TypeError, ValueError):
+            x = int(float(text_shape.get("x", 0)))
+        try:
+            y = int(float(override.get("y", text_shape.get("y", 0))))
+        except (TypeError, ValueError):
+            y = int(float(text_shape.get("y", 0)))
+        try:
+            width = max(1, int(float(override.get("width", text_shape.get("width", 1)))))
+        except (TypeError, ValueError):
+            width = max(1, int(float(text_shape.get("width", 1))))
+        try:
+            height = max(1, int(float(override.get("height", text_shape.get("height", 1)))))
+        except (TypeError, ValueError):
+            height = max(1, int(float(text_shape.get("height", 1))))
         family = str(override.get("font_family") or text_shape.get("font_family") or "Arial")
         weight = str(override.get("font_weight") or text_shape.get("font_weight") or "normal")
-        font_size = max(1, int(float(text_shape.get("font_size", 72))))
-        align = str(text_shape.get("align", "center")).lower()
-        color = _parse_color(str(text_shape.get("color", "#1c1917")))
+        font_size = max(1, int(float(override.get("font_size", text_shape.get("font_size", 72)))))
+        align = str(override.get("align", text_shape.get("align", "center"))).lower()
+        color = _parse_color(str(override.get("color", text_shape.get("color", "#1c1917"))))
         gradient_enabled = _parse_bool(text_shape.get("gradient_enabled", False))
         gradient_from = _parse_color(str(text_shape.get("gradient_from") or text_shape.get("color", "#1c1917")))
         gradient_to = _parse_color(str(text_shape.get("gradient_to") or text_shape.get("color", "#1c1917")))
         try:
+            line_height_ratio = float(override.get("line_height", text_shape.get("line_height", 1.2)))
+        except (TypeError, ValueError):
+            line_height_ratio = 1.2
+        line_height_ratio = max(0.8, min(3.5, line_height_ratio))
+        try:
+            letter_spacing = float(override.get("letter_spacing", text_shape.get("letter_spacing", 0)))
+        except (TypeError, ValueError):
+            letter_spacing = 0.0
+        letter_spacing = max(-20.0, min(80.0, letter_spacing))
+        try:
             gradient_angle = float(text_shape.get("gradient_angle", 0))
         except (TypeError, ValueError):
             gradient_angle = 0.0
+        rich_runs = _parse_rich_runs(override.get("rich_runs"), len(value))
+
+        if rich_runs:
+            _draw_rich_text_positions(
+                draw,
+                x=x,
+                y=y,
+                width=width,
+                height=height,
+                value=value,
+                align=align,
+                line_height_ratio=line_height_ratio,
+                letter_spacing=letter_spacing,
+                base_family=family,
+                base_weight=weight,
+                base_size=font_size,
+                base_color=str(override.get("color", text_shape.get("color", "#1c1917"))),
+                rich_runs=rich_runs,
+            )
+            continue
 
         font = _load_font(family, font_size, weight)
-        lines = _wrap_text(draw, value, font, width)
+        lines = _wrap_text(draw, value, font, width, letter_spacing)
         bbox = draw.textbbox((0, 0), "Ay", font=font)
-        line_height = max(1, int((bbox[3] - bbox[1]) * 1.2))
+        line_height = max(1, int((bbox[3] - bbox[1]) * line_height_ratio))
         total_height = line_height * len(lines)
         cursor_y = max(0, int((height - total_height) / 2))
         laid_out_lines: list[tuple[str, int, int]] = []
 
         for line in lines:
-            line_width = _text_width(draw, line, font)
+            line_width = _text_width(draw, line, font, letter_spacing)
             if align == "right":
                 cursor_x = max(0, width - line_width)
             elif align == "left":
@@ -393,13 +672,27 @@ def _draw_text_positions(
             text_mask = Image.new("L", (width, height), 0)
             mask_draw = ImageDraw.Draw(text_mask)
             for line, local_x, local_y in laid_out_lines:
-                mask_draw.text((local_x, local_y), line, fill=255, font=font)
+                _draw_spaced_text(
+                    mask_draw,
+                    (local_x, local_y),
+                    line,
+                    font=font,
+                    fill=255,
+                    letter_spacing=letter_spacing,
+                )
             gradient = _build_linear_gradient(width, height, gradient_from, gradient_to, gradient_angle)
             image.paste(gradient, (x, y), text_mask)
             continue
 
         for line, local_x, local_y in laid_out_lines:
-            draw.text((x + local_x, y + local_y), line, fill=color, font=font)
+            _draw_spaced_text(
+                draw,
+                (x + local_x, y + local_y),
+                line,
+                font=font,
+                fill=color,
+                letter_spacing=letter_spacing,
+            )
 
 
 def compose_print_png(

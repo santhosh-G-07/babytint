@@ -30,11 +30,18 @@ export const metadata: Metadata = {
     template: "%s | BabyTint",
   },
   description:
-    "Custom photo frame studio. Build single and collage wall frames with live editing and print-ready ordering.",
+    "BabyTint Store for custom baby photo frames, kids photo frame gifts, and online family collage frames with live editing and print-ready ordering.",
   applicationName: "BabyTint",
   keywords: [
+    "babytint",
+    "babytint store",
+    "babytiint store",
     "custom photo frames",
     "baby photo frame",
+    "photo frame for children",
+    "kids photo frame",
+    "online frames",
+    "online photo frame store",
     "personalized frame gifts",
     "photo collage frame",
     "print ready frame design",
@@ -45,7 +52,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "BabyTint | Custom Photo Frames",
     description:
-      "Design personalized baby and family photo frames online with live editing and print-ready output.",
+      "Design personalized baby and family photo frames online with live editing and print-ready output at BabyTint Store.",
     url: "/",
     siteName: "BabyTint",
     type: "website",
@@ -55,7 +62,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "BabyTint | Custom Photo Frames",
     description:
-      "Design personalized baby and family photo frames online with live editing and print-ready output.",
+      "Design personalized baby and family photo frames online with live editing and print-ready output at BabyTint Store.",
   },
   robots: {
     index: true,

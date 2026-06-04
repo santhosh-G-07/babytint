@@ -51,6 +51,14 @@ export function CartDrawer() {
                     <p className="text-sm text-stone-500 dark:text-stone-400">
                       Qty {item.quantity} | {inr(item.price)}
                     </p>
+                    <div className="mt-2 flex gap-2">
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href="/cart">View</Link>
+                      </Button>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/editor/${item.frame.slug}?cart_item=${encodeURIComponent(item.id)}`}>Edit</Link>
+                      </Button>
+                    </div>
                   </div>
                   <Button
                     variant="ghost"

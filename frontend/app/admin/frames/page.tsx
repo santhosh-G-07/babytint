@@ -22,6 +22,14 @@ const SlotPositionMapper = dynamic(
   { ssr: false },
 );
 
+const FrameCreationWizard = dynamic(
+  () =>
+    import("@/components/admin/FrameCreationWizard").then(
+      (module) => module.FrameCreationWizard,
+    ),
+  { ssr: false },
+);
+
 const slotSample = JSON.stringify(
   [{ slot_id: 1, x: 120, y: 80, width: 300, height: 250, shape: "rect" }],
   null,
@@ -49,6 +57,8 @@ const textSample = JSON.stringify(
       gradient_to: "#92400e",
       gradient_angle: 0,
       align: "center",
+      line_height: 1.2,
+      letter_spacing: 0,
       allow_customer_font: true,
     },
   ],
@@ -77,6 +87,7 @@ export default function AdminFramesPage() {
   const [editing, setEditing] = useState<FrameTemplate | null>(null);
   const [form, setForm] = useState(toForm());
   const [uploading, setUploading] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin", "frames"],
@@ -177,7 +188,15 @@ export default function AdminFramesPage() {
     <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
       <Card>
         <CardHeader>
-          <CardTitle>Frame Templates</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle>Frame Templates</CardTitle>
+            <Button
+              size="sm"
+              onClick={() => setWizardOpen(true)}
+            >
+              Create With Wizard
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           {isLoading ? (
@@ -297,29 +316,6 @@ export default function AdminFramesPage() {
             ) : null}
           </div>
           <div className="space-y-1.5">
-            <Label>Slot Positions JSON</Label>
-            <Textarea
-              rows={10}
-              value={form.slot_positions}
-              onChange={(event) => setForm({ ...form, slot_positions: event.target.value })}
-            />
-            {jsonError ? (
-              <p className="text-xs text-red-600 dark:text-red-300">{jsonError}</p>
-            ) : null}
-          </div>
-          <div className="space-y-1.5">
-            <Label>Text Positions JSON</Label>
-            <Textarea
-              rows={8}
-              value={form.text_positions}
-              placeholder={textSample}
-              onChange={(event) => setForm({ ...form, text_positions: event.target.value })}
-            />
-            {textJsonError ? (
-              <p className="text-xs text-red-600 dark:text-red-300">{textJsonError}</p>
-            ) : null}
-          </div>
-          <div className="space-y-1.5">
             <Label>Visual Frame Mapper</Label>
             <SlotPositionMapper
               frameAssetUrl={form.frame_asset_url}
@@ -339,9 +335,37 @@ export default function AdminFramesPage() {
               }
             />
             <p className="text-xs text-stone-500 dark:text-stone-400">
-              Drag slots and text boxes visually. Free-shape slots use editable polygon points.
+              Main flow: add slot/text, then drag and resize directly on the canvas.
             </p>
           </div>
+          <details className="rounded-lg border border-stone-200 p-3 dark:border-stone-800">
+            <summary className="cursor-pointer text-sm font-medium">Advanced JSON (optional)</summary>
+            <div className="mt-3 space-y-3">
+              <div className="space-y-1.5">
+                <Label>Slot Positions JSON</Label>
+                <Textarea
+                  rows={10}
+                  value={form.slot_positions}
+                  onChange={(event) => setForm({ ...form, slot_positions: event.target.value })}
+                />
+                {jsonError ? (
+                  <p className="text-xs text-red-600 dark:text-red-300">{jsonError}</p>
+                ) : null}
+              </div>
+              <div className="space-y-1.5">
+                <Label>Text Positions JSON</Label>
+                <Textarea
+                  rows={10}
+                  value={form.text_positions}
+                  placeholder={textSample}
+                  onChange={(event) => setForm({ ...form, text_positions: event.target.value })}
+                />
+                {textJsonError ? (
+                  <p className="text-xs text-red-600 dark:text-red-300">{textJsonError}</p>
+                ) : null}
+              </div>
+            </div>
+          </details>
           <div className="flex gap-2">
             <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
               {saveMutation.isPending ? "Saving..." : editing ? "Update Frame" : "Create Frame"}
@@ -358,6 +382,16 @@ export default function AdminFramesPage() {
           </div>
         </CardContent>
       </Card>
+
+      {wizardOpen ? (
+        <FrameCreationWizard
+          onClose={() => setWizardOpen(false)}
+          onCreated={() => {
+            void queryClient.invalidateQueries({ queryKey: ["admin", "frames"] });
+            void queryClient.invalidateQueries({ queryKey: ["frames"] });
+          }}
+        />
+      ) : null}
     </div>
   );
 }

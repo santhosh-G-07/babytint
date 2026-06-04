@@ -40,6 +40,8 @@ class TextPosition(BaseModel):
     gradient_to: str | None = None
     gradient_angle: float = 0.0
     align: str = "center"
+    line_height: float = Field(default=1.2, gt=0, le=4)
+    letter_spacing: float = Field(default=0.0, ge=-20, le=80)
     allow_customer_font: bool = True
 
 

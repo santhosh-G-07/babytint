@@ -4,7 +4,6 @@ import { ArrowUpRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
 import type { FrameTemplate } from "@/types";
 
@@ -13,14 +12,14 @@ export function FrameCard({ frame }: { frame: FrameTemplate }) {
   const hasOffer = frame.offer_price !== null && Number(frame.offer_price) < Number(frame.price);
 
   return (
-    <Card className="group overflow-hidden border-none bg-transparent shadow-none">
-      <div className="relative overflow-hidden rounded-2xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+    <article className="group surface h-full overflow-hidden p-0 transition duration-300 hover:-translate-y-0.5 hover:shadow-lg">
+      <div className="relative overflow-hidden rounded-t-2xl">
         <div className="absolute left-3 top-3 z-10 flex gap-2">
           <Badge variant="secondary">{frame.size}</Badge>
           <Badge variant="outline">{frame.category}</Badge>
           {hasOffer ? <Badge variant="success">Sale</Badge> : null}
         </div>
-        <div className="relative aspect-[4/5] overflow-hidden bg-gradient-to-br from-stone-100 via-stone-50 to-amber-50 dark:from-stone-900 dark:via-stone-900 dark:to-stone-800">
+        <div className="relative aspect-[4/5] overflow-hidden bg-[radial-gradient(circle_at_16%_18%,rgba(245,158,11,0.16),transparent_36%),linear-gradient(135deg,rgba(255,255,255,0.92),rgba(255,255,255,0.62))] dark:bg-[radial-gradient(circle_at_16%_18%,rgba(245,158,11,0.2),transparent_36%),linear-gradient(135deg,rgba(30,28,26,0.9),rgba(24,22,20,0.76))]">
           <Image
             src={frame.frame_asset_url}
             alt={frame.name}
@@ -30,7 +29,7 @@ export function FrameCard({ frame }: { frame: FrameTemplate }) {
           />
         </div>
       </div>
-      <CardContent className="px-1 pb-0 pt-4">
+      <div className="space-y-3 px-4 pb-4 pt-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="line-clamp-1 text-lg font-semibold">{frame.name}</h3>
@@ -49,7 +48,7 @@ export function FrameCard({ frame }: { frame: FrameTemplate }) {
             </Link>
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </article>
   );
 }

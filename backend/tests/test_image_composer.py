@@ -159,6 +159,65 @@ def test_compose_print_png_supports_gradient_text(monkeypatch):
     assert max(blue_values) - min(blue_values) > 35
 
 
+def test_compose_print_png_supports_rich_text_runs(monkeypatch):
+    frame_image = Image.new("RGBA", (600, 240), (255, 255, 255, 0))
+    source_image = Image.new("RGBA", (300, 300), (180, 180, 180, 255))
+
+    def fake_open_image(url: str):
+        if "frame" in url:
+            return frame_image.copy()
+        return source_image.copy()
+
+    monkeypatch.setattr(image_composer, "_open_image_from_url", fake_open_image)
+
+    result = image_composer.compose_print_png(
+        frame_asset_url="https://example.com/frame.png",
+        slot_positions=[],
+        text_positions=[
+            {
+                "text_id": 11,
+                "x": 30,
+                "y": 30,
+                "width": 540,
+                "height": 180,
+                "font_family": "Arial",
+                "font_weight": "normal",
+                "font_size": 96,
+                "color": "#111111",
+                "align": "left",
+            }
+        ],
+        customization_data={
+            "slots": [],
+            "texts": [
+                {
+                    "text_id": 11,
+                    "value": "AB",
+                    "letter_spacing": 120,
+                    "rich_runs": [
+                        {"start": 0, "end": 1, "color": "#ff0000"},
+                        {"start": 1, "end": 2, "color": "#0000ff"},
+                    ],
+                }
+            ],
+        },
+    )
+
+    output = Image.open(io.BytesIO(result)).convert("RGBA")
+    left_crop = output.crop((30, 30, 180, 210))
+    right_crop = output.crop((200, 30, 380, 210))
+
+    left_pixels = [pixel for pixel in left_crop.getdata() if pixel[3] > 0]
+    right_pixels = [pixel for pixel in right_crop.getdata() if pixel[3] > 0]
+
+    assert left_pixels
+    assert right_pixels
+    assert max(pixel[0] for pixel in left_pixels) > 180
+    assert min(pixel[2] for pixel in left_pixels) < 120
+    assert max(pixel[2] for pixel in right_pixels) > 180
+    assert min(pixel[0] for pixel in right_pixels) < 120
+
+
 def test_compose_print_png_supports_diamond_shape_without_custom_points(monkeypatch):
     frame_image = Image.new("RGBA", (320, 320), (255, 255, 255, 0))
     source_image = Image.new("RGBA", (500, 500), (35, 140, 220, 255))

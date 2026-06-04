@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Minus, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Eye, Minus, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import { AuthGuard } from "@/components/layout/AuthGuard";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,10 @@ import { inr } from "@/lib/utils";
 
 export default function CartPage() {
   const { cart, removeFromCart, updateQuantity, subtotal } = useCartStore();
+  const [previewItemId, setPreviewItemId] = useState<string | null>(null);
+
+  const previewItem = cart.find((item) => item.id === previewItemId) ?? null;
+  const previewUrl = previewItem?.customization.composite_preview_url ?? previewItem?.frame.frame_asset_url ?? null;
 
   return (
     <AuthGuard>
@@ -47,9 +52,9 @@ export default function CartPage() {
                     <div className="flex-1">
                       <h2 className="font-semibold">{item.frame.name}</h2>
                       <p className="text-sm text-stone-500 dark:text-stone-400">
-                        {item.frame.size} • {item.frame.slot_count} slots
+                        {item.frame.size} | {item.frame.slot_count} slots
                       </p>
-                      <div className="mt-3 flex items-center gap-2">
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
                         <Button
                           size="icon"
                           variant="outline"
@@ -66,10 +71,25 @@ export default function CartPage() {
                           <Plus className="h-4 w-4" />
                         </Button>
                         <Button
+                          size="sm"
+                          variant="outline"
+                          className="ml-auto"
+                          onClick={() => setPreviewItemId(item.id)}
+                        >
+                          <Eye className="mr-1.5 h-4 w-4" />
+                          View
+                        </Button>
+                        <Button size="sm" variant="outline" asChild>
+                          <Link href={`/editor/${item.frame.slug}?cart_item=${encodeURIComponent(item.id)}`}>
+                            <Pencil className="mr-1.5 h-4 w-4" />
+                            Edit
+                          </Link>
+                        </Button>
+                        <Button
                           variant="ghost"
                           size="icon"
-                          className="ml-auto"
                           onClick={() => removeFromCart(item.id)}
+                          aria-label="Remove item"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -106,7 +126,49 @@ export default function CartPage() {
           </div>
         )}
       </div>
+
+      {previewItem && previewUrl ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+          <div className="relative w-full max-w-4xl rounded-2xl bg-white p-4 shadow-xl dark:bg-stone-900">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-3 top-3 z-10 bg-white/80 dark:bg-stone-900/80"
+              onClick={() => setPreviewItemId(null)}
+              aria-label="Close preview"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+            <div className="mb-3 pr-12">
+              <p className="text-sm text-stone-500 dark:text-stone-400">Preview</p>
+              <h3 className="font-semibold">{previewItem.frame.name}</h3>
+            </div>
+            <div className="mx-auto flex max-h-[78vh] w-full items-center justify-center overflow-auto rounded-xl bg-stone-200/70 p-5 dark:bg-stone-800/60">
+              <div className="rounded-[10px] bg-[#f3f3f3] p-3 shadow-[0_26px_42px_-26px_rgba(0,0,0,0.7)]">
+                <div className="rounded-[3px] border-[10px] border-white bg-white shadow-inner sm:border-[12px]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={previewUrl}
+                    alt={`${previewItem.frame.name} preview`}
+                    draggable={false}
+                    className="block max-h-[68vh] max-w-full select-none object-contain"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="mt-3 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setPreviewItemId(null)}>
+                Close
+              </Button>
+              <Button asChild>
+                <Link href={`/editor/${previewItem.frame.slug}?cart_item=${encodeURIComponent(previewItem.id)}`}>
+                  Edit this design
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </AuthGuard>
   );
 }
-

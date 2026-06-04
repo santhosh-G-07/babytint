@@ -408,7 +408,7 @@ function TextLayer({
           return null;
         }
         return (
-          <Group key={`text-${field.text_id}`}>
+          <Group key={`text-${field.text_id}`} preventDefault={false}>
             {editable && selectedTextId === field.text_id ? (
               <Rect
                 name="editor-guide"
@@ -424,6 +424,7 @@ function TextLayer({
                 strokeWidth={3}
                 dash={[]}
                 draggable
+                preventDefault={false}
                 onClick={() => {
                   const shouldOpenEditor = !value.trim() || selectedTextId === field.text_id;
                   onSelectText?.(field.text_id);
@@ -496,6 +497,7 @@ function TextLayer({
                 letterSpacing={resolved.letter_spacing}
                 verticalAlign="middle"
                 listening={editable}
+                preventDefault={false}
                 onClick={() => {
                   if (!editable) {
                     return;
@@ -589,6 +591,7 @@ function SlotImage({
       width={displayWidth}
       height={displayHeight}
       draggable
+      preventDefault={false}
       onClick={onSelect}
       onTap={onSelect}
       onDragStart={onDragStart}
@@ -739,7 +742,8 @@ export function FrameCanvas({
   return (
     <div
       ref={wrapperRef}
-      className="surface w-full overflow-auto p-3 sm:p-5"
+      className="surface w-full overflow-visible p-3 sm:p-5"
+      style={{ touchAction: "pan-y pinch-zoom" }}
       onContextMenu={(event) => event.preventDefault()}
     >
       <div className="relative inline-block">
@@ -747,6 +751,7 @@ export function FrameCanvas({
         ref={sharedStageRef}
         width={stageWidth}
         height={stageHeight}
+        style={{ touchAction: "pan-y pinch-zoom" }}
         onMouseDown={(event) => {
           if (!textEditable || !onSelectText) {
             return;
@@ -785,6 +790,7 @@ export function FrameCanvas({
             return (
               <Group
                 key={slot.slot_id}
+                preventDefault={false}
                 clipFunc={(ctx) => slotClipPath(ctx, slot)}
                 onClick={() => {
                   onSelectSlot(slot.slot_id);
@@ -833,6 +839,7 @@ export function FrameCanvas({
                       y={slot.y}
                       width={slot.width}
                       height={slot.height}
+                      preventDefault={false}
                       fill="rgba(255, 255, 255, 0.72)"
                       stroke="#7c95b5"
                       strokeWidth={2}
@@ -843,6 +850,7 @@ export function FrameCanvas({
                       y={slot.y + slot.height / 2 - 14}
                       width={Math.max(20, slot.width - 20)}
                       text={slotPrompt(slot, slotIndex)}
+                      preventDefault={false}
                       fontSize={15}
                       fontStyle="bold"
                       fontFamily={fontStack("Poppins")}
@@ -867,6 +875,7 @@ export function FrameCanvas({
             return (
               <Group
                 key={`above-${slot.slot_id}`}
+                preventDefault={false}
                 clipFunc={(ctx) => slotClipPath(ctx, slot)}
                 onClick={() => {
                   onSelectSlot(slot.slot_id);
@@ -915,6 +924,7 @@ export function FrameCanvas({
                       y={slot.y}
                       width={slot.width}
                       height={slot.height}
+                      preventDefault={false}
                       fill="rgba(255, 255, 255, 0.72)"
                       stroke="#7c95b5"
                       strokeWidth={2}
@@ -925,6 +935,7 @@ export function FrameCanvas({
                       y={slot.y + slot.height / 2 - 14}
                       width={Math.max(20, slot.width - 20)}
                       text={slotPrompt(slot, slotIndex)}
+                      preventDefault={false}
                       fontSize={15}
                       fontStyle="bold"
                       fontFamily={fontStack("Poppins")}

@@ -14,7 +14,8 @@ const supportLinks = [
 
 const legalLinks = [
   { href: "/privacy", label: "Privacy Policy" },
-  { href: "/terms", label: "Terms & Conditions" },
+  { href: "/terms", label: "Terms of Service" },
+  { href: "/cancellation-refund", label: "Cancellation & Refund" },
 ];
 
 export function SiteFooter() {
