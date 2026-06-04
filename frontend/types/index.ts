@@ -132,6 +132,13 @@ export interface LocalCartItem {
   quantity: number;
   price: number;
   customization: CustomizationData;
+  sync_key?: string;
+  server_cart_item_id?: string;
+}
+
+export interface RemovedCartItem {
+  key: string;
+  server_cart_item_id?: string;
 }
 
 export interface EditorSlotState {

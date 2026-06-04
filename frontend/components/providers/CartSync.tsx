@@ -4,16 +4,69 @@ import { useEffect, useRef } from "react";
 
 import { addServerCartItem, ApiError, getFrame, listServerCart, removeServerCartItem } from "@/lib/api";
 import { hasAuthToken } from "@/lib/local-admin-auth";
-import { useCartStore } from "@/lib/store";
+import { cartSyncKey, useCartStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import type { CustomizationData } from "@/types";
 
+type ServerCartItem = Awaited<ReturnType<typeof listServerCart>>[number];
+
 function serverKey(frameId: string, customizationData: unknown) {
-  return `${frameId}::${JSON.stringify(customizationData)}`;
+  return cartSyncKey(frameId, normalizeCustomization(frameId, customizationData));
 }
 
 function localKey(item: { frame: { id: string }; customization: CustomizationData }) {
-  return `${item.frame.id}::${JSON.stringify(item.customization)}`;
+  return item.customization ? cartSyncKey(item.frame.id, item.customization) : "";
+}
+
+function syncSignature() {
+  const state = useCartStore.getState();
+  return JSON.stringify({
+    cart: state.cart
+      .map((item) => ({
+        key: item.sync_key ?? localKey(item),
+        serverCartItemId: item.server_cart_item_id ?? "",
+      }))
+      .sort((a, b) => a.key.localeCompare(b.key)),
+    removed: state.removedCartItems
+      .map((item) => ({
+        key: item.key,
+        serverCartItemId: item.server_cart_item_id ?? "",
+      }))
+      .sort((a, b) => a.key.localeCompare(b.key)),
+  });
+}
+
+async function removeServerItemsForDeletedKeys(
+  serverItems: ServerCartItem[],
+  removedItems: { key: string; server_cart_item_id?: string }[],
+) {
+  const deletedKeys: string[] = [];
+  for (const removed of removedItems) {
+    const matches = serverItems.filter((item) => {
+      const key = serverKey(item.frame_id, item.customization_data);
+      return key === removed.key || item.id === removed.server_cart_item_id;
+    });
+
+    if (!matches.length) {
+      deletedKeys.push(removed.key);
+      continue;
+    }
+
+    let allDeleted = true;
+    for (const item of matches) {
+      try {
+        await removeServerCartItem(item.id);
+      } catch {
+        allDeleted = false;
+      }
+    }
+    if (allDeleted) {
+      deletedKeys.push(removed.key);
+    }
+  }
+  if (deletedKeys.length) {
+    useCartStore.getState().forgetRemovedCartItems(deletedKeys);
+  }
 }
 
 function normalizeCustomization(frameId: string, raw: unknown): CustomizationData {
@@ -47,27 +100,13 @@ function normalizeCustomization(frameId: string, raw: unknown): CustomizationDat
 
 export function CartSync() {
   const cart = useCartStore((state) => state.cart);
+  const removedCartItems = useCartStore((state) => state.removedCartItems);
   const syncBusyRef = useRef(false);
   const hydratedForSessionRef = useRef<string | null>(null);
   const lastSyncedSignatureRef = useRef<string>("");
-  const previousLocalKeysRef = useRef<Set<string> | null>(null);
-  const locallyDeletedKeysRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let active = true;
-
-    const currentLocalKeys = new Set(cart.map(localKey));
-    if (previousLocalKeysRef.current) {
-      for (const previousKey of previousLocalKeysRef.current) {
-        if (!currentLocalKeys.has(previousKey)) {
-          locallyDeletedKeysRef.current.add(previousKey);
-        }
-      }
-    }
-    for (const currentKey of currentLocalKeys) {
-      locallyDeletedKeysRef.current.delete(currentKey);
-    }
-    previousLocalKeysRef.current = currentLocalKeys;
 
     const sync = async () => {
       if (!active || syncBusyRef.current) {
@@ -83,11 +122,7 @@ export function CartSync() {
         return;
       }
 
-      const localSignature = JSON.stringify(
-        cart
-          .map((item) => ({ frameId: item.frame.id, customization: item.customization }))
-          .sort((a, b) => a.frameId.localeCompare(b.frameId)),
-      );
+      const localSignature = syncSignature();
       if (
         hydratedForSessionRef.current === (session?.user.id ?? "local") &&
         lastSyncedSignatureRef.current === localSignature
@@ -99,14 +134,20 @@ export function CartSync() {
       const authKey = session?.user.id ?? "local";
       try {
         const serverItems = await listServerCart();
+        await removeServerItemsForDeletedKeys(
+          serverItems,
+          useCartStore.getState().removedCartItems,
+        );
 
         // One-time hydration per authenticated session:
         // if server has items absent in local cart, pull them into local.
         if (hydratedForSessionRef.current !== (session?.user.id ?? "local")) {
           const localKeys = new Set(useCartStore.getState().cart.map(localKey));
-          for (const serverItem of serverItems) {
+          const removedKeys = new Set(useCartStore.getState().removedCartItems.map((item) => item.key));
+          const serverAfterRemovals = await listServerCart();
+          for (const serverItem of serverAfterRemovals) {
             const key = serverKey(serverItem.frame_id, serverItem.customization_data);
-            if (localKeys.has(key) || locallyDeletedKeysRef.current.has(key)) {
+            if (localKeys.has(key) || removedKeys.has(key)) {
               continue;
             }
             try {
@@ -120,6 +161,7 @@ export function CartSync() {
                 quantity: 1,
                 price: Number(frame.offer_price ?? frame.price),
                 customization,
+                serverCartItemId: serverItem.id,
               });
               localKeys.add(key);
             } catch {
@@ -131,30 +173,54 @@ export function CartSync() {
         // Reconcile server cart with current local cart.
         const latestLocalCart = useCartStore.getState().cart;
         const desiredKeys = new Set(latestLocalCart.map(localKey));
+        const removedKeys = new Set(useCartStore.getState().removedCartItems.map((item) => item.key));
         const serverNow = await listServerCart();
-        const serverByKey = new Map(serverNow.map((item) => [serverKey(item.frame_id, item.customization_data), item]));
+        const serverByKey = new Map<string, ServerCartItem>();
+        const duplicateServerItems: ServerCartItem[] = [];
+        for (const item of serverNow) {
+          const key = serverKey(item.frame_id, item.customization_data);
+          if (serverByKey.has(key)) {
+            duplicateServerItems.push(item);
+          } else {
+            serverByKey.set(key, item);
+          }
+        }
 
         // Remove stale server items that are no longer in local cart.
         for (const [key, item] of Array.from(serverByKey.entries())) {
-          if (!desiredKeys.has(key)) {
+          if (!desiredKeys.has(key) || removedKeys.has(key)) {
             try {
               await removeServerCartItem(item.id);
-              locallyDeletedKeysRef.current.delete(key);
             } catch {
               // Best-effort cleanup.
             }
           }
         }
 
+        // Remove duplicate server rows for the same local cart item.
+        for (const item of duplicateServerItems) {
+          try {
+            await removeServerCartItem(item.id);
+          } catch {
+            // Best-effort cleanup.
+          }
+        }
+
         // Add missing server items from local cart.
         for (const item of latestLocalCart) {
           const key = localKey(item);
-          if (!serverByKey.has(key) && !locallyDeletedKeysRef.current.has(key)) {
+          const serverItem = serverByKey.get(key);
+          if (serverItem) {
+            useCartStore.getState().markServerCartItem(item.id, serverItem.id);
+            continue;
+          }
+          if (!removedKeys.has(key)) {
             try {
-              await addServerCartItem({
+              const created = await addServerCartItem({
                 frame_id: item.frame.id,
                 customization_data: item.customization,
               });
+              useCartStore.getState().markServerCartItem(item.id, created.id);
             } catch {
               // Best-effort sync.
             }
@@ -162,12 +228,7 @@ export function CartSync() {
         }
 
         hydratedForSessionRef.current = session?.user.id ?? "local";
-        lastSyncedSignatureRef.current = JSON.stringify(
-          useCartStore
-            .getState()
-            .cart.map((item) => ({ frameId: item.frame.id, customization: item.customization }))
-            .sort((a, b) => a.frameId.localeCompare(b.frameId)),
-        );
+        lastSyncedSignatureRef.current = syncSignature();
       } catch (error) {
         if (error instanceof ApiError) {
           const isAuthProviderMissing = /Authentication provider is not configured/i.test(error.message);
@@ -189,8 +250,6 @@ export function CartSync() {
     const { data: listener } = supabase.auth.onAuthStateChange(() => {
       hydratedForSessionRef.current = null;
       lastSyncedSignatureRef.current = "";
-      previousLocalKeysRef.current = null;
-      locallyDeletedKeysRef.current.clear();
       void sync();
     });
 
@@ -198,7 +257,7 @@ export function CartSync() {
       active = false;
       listener.subscription.unsubscribe();
     };
-  }, [cart]);
+  }, [cart, removedCartItems]);
 
   return null;
 }

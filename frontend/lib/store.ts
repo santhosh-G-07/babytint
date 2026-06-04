@@ -8,9 +8,35 @@ import type {
   EditorSlotState,
   FrameTemplate,
   LocalCartItem,
+  RemovedCartItem,
   SlotAdjustments,
   TextPosition,
 } from "@/types";
+
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalize);
+  }
+  if (value && typeof value === "object") {
+    const result: Record<string, unknown> = {};
+    for (const key of Object.keys(value).sort()) {
+      const nextValue = (value as Record<string, unknown>)[key];
+      if (nextValue !== undefined) {
+        result[key] = canonicalize(nextValue);
+      }
+    }
+    return result;
+  }
+  return value;
+}
+
+function stableStringify(value: unknown): string {
+  return JSON.stringify(canonicalize(value)) ?? "";
+}
+
+export function cartSyncKey(frameId: string, customization: CustomizationData) {
+  return `${frameId}::${stableStringify(customization)}`;
+}
 
 function hashString(value: string) {
   let hash = 0;
@@ -22,19 +48,23 @@ function hashString(value: string) {
 }
 
 function cartId(frameId: string, customization: CustomizationData) {
-  return `${frameId}-${hashString(JSON.stringify(customization))}`;
+  return `${frameId}-${hashString(stableStringify(customization))}`;
 }
 
 interface CartStore {
   cart: LocalCartItem[];
+  removedCartItems: RemovedCartItem[];
   addToCart: (item: {
     frame: FrameTemplate;
     quantity?: number;
     price: number;
     customization: CustomizationData;
+    serverCartItemId?: string;
   }) => void;
   removeFromCart: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
+  markServerCartItem: (id: string, serverCartItemId: string) => void;
+  forgetRemovedCartItems: (keys: string[]) => void;
   clearCart: () => void;
   subtotal: () => number;
 }
@@ -43,16 +73,24 @@ export const useCartStore = create<CartStore>()(
   persist(
     (set, get) => ({
       cart: [],
-      addToCart: ({ frame, quantity = 1, price, customization }) => {
+      removedCartItems: [],
+      addToCart: ({ frame, quantity = 1, price, customization, serverCartItemId }) => {
         const id = cartId(frame.id, customization);
+        const syncKey = cartSyncKey(frame.id, customization);
         const existing = get().cart.find((item) => item.id === id);
         if (existing) {
           set({
             cart: get().cart.map((item) =>
               item.id === id
-                ? { ...item, quantity: item.quantity + quantity }
+                ? {
+                    ...item,
+                    quantity: item.quantity + quantity,
+                    server_cart_item_id: serverCartItemId ?? item.server_cart_item_id,
+                    sync_key: item.sync_key ?? syncKey,
+                  }
                 : item,
             ),
+            removedCartItems: get().removedCartItems.filter((item) => item.key !== syncKey),
           });
           return;
         }
@@ -64,25 +102,68 @@ export const useCartStore = create<CartStore>()(
               quantity,
               price,
               customization,
+              sync_key: syncKey,
+              server_cart_item_id: serverCartItemId,
             },
             ...get().cart,
           ],
+          removedCartItems: get().removedCartItems.filter((item) => item.key !== syncKey),
         });
       },
-      removeFromCart: (id) => set({ cart: get().cart.filter((item) => item.id !== id) }),
+      removeFromCart: (id) => {
+        const item = get().cart.find((cartItem) => cartItem.id === id);
+        if (!item) {
+          return;
+        }
+        const key = item.sync_key ?? cartSyncKey(item.frame.id, item.customization);
+        const removedCartItems = get().removedCartItems.filter((removed) => removed.key !== key);
+        removedCartItems.unshift({
+          key,
+          server_cart_item_id: item.server_cart_item_id,
+        });
+        set({
+          cart: get().cart.filter((cartItem) => cartItem.id !== id),
+          removedCartItems,
+        });
+      },
       updateQuantity: (id, quantity) =>
         set({
           cart: get()
             .cart.map((item) => (item.id === id ? { ...item, quantity: Math.max(1, quantity) } : item))
             .filter((item) => item.quantity > 0),
         }),
-      clearCart: () => set({ cart: [] }),
+      markServerCartItem: (id, serverCartItemId) =>
+        set({
+          cart: get().cart.map((item) =>
+            item.id === id ? { ...item, server_cart_item_id: serverCartItemId } : item,
+          ),
+        }),
+      forgetRemovedCartItems: (keys) => {
+        const keySet = new Set(keys);
+        set({
+          removedCartItems: get().removedCartItems.filter((item) => !keySet.has(item.key)),
+        });
+      },
+      clearCart: () => {
+        const removedCartItems = [...get().removedCartItems];
+        const removedKeys = new Set(removedCartItems.map((item) => item.key));
+        for (const item of get().cart) {
+          const key = item.sync_key ?? cartSyncKey(item.frame.id, item.customization);
+          if (!removedKeys.has(key)) {
+            removedCartItems.push({
+              key,
+              server_cart_item_id: item.server_cart_item_id,
+            });
+          }
+        }
+        set({ cart: [], removedCartItems });
+      },
       subtotal: () =>
         get().cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0),
     }),
     {
       name: "babytint-cart",
-      version: 2,
+      version: 3,
     },
   ),
 );

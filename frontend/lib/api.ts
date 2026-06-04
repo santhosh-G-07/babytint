@@ -190,7 +190,13 @@ export async function addServerCartItem(payload: {
   frame_id: string;
   customization_data: unknown;
 }) {
-  return apiFetch(
+  return apiFetch<{
+    id: string;
+    user_id: string;
+    frame_id: string;
+    customization_data: Record<string, unknown>;
+    created_at: string;
+  }>(
     "/api/orders/cart",
     {
       method: "POST",
