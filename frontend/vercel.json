@@ -6,7 +6,7 @@
   "crons": [
     {
       "path": "/api/cron/supabase-warm",
-      "schedule": "0 */12 * * *"
+      "schedule": "0 5 * * *"
     }
   ]
 }
