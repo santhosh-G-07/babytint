@@ -11,15 +11,34 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { authMe, createCheckout, createRazorpayOrder } from "@/lib/api";
+import { authMe, createCheckout, createRazorpayOrder, verifyRazorpayPayment } from "@/lib/api";
 import { useCartStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import { inr } from "@/lib/utils";
 
 declare global {
   interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
+    Razorpay?: new (options: Record<string, unknown>) => RazorpayCheckout;
   }
+}
+
+interface RazorpayCheckout {
+  open: () => void;
+  on: (event: "payment.failed", callback: (response: RazorpayFailureResponse) => void) => void;
+}
+
+interface RazorpaySuccessResponse {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
+}
+
+interface RazorpayFailureResponse {
+  error?: {
+    code?: string;
+    description?: string;
+    reason?: string;
+  };
 }
 
 interface CheckoutForm {
@@ -79,6 +98,7 @@ export default function CheckoutPage() {
     }
 
     setPaying(true);
+    let modalOpened = false;
     try {
       const { data } = await supabase.auth.getSession();
       let userEmail = data.session?.user.email ?? "";
@@ -133,24 +153,47 @@ export default function CheckoutPage() {
         theme: {
           color: "#8A6A42",
         },
-        handler: () => {
-          toast.success("Payment successful. Your order is confirmed.");
-          clearCart();
-          router.push("/orders");
+        handler: async (response: RazorpaySuccessResponse) => {
+          try {
+            await verifyRazorpayPayment({
+              app_order_id: order.id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+            toast.success("Payment verified. Your order is confirmed.");
+            clearCart();
+            router.push("/orders");
+          } catch (err) {
+            const message = err instanceof Error ? err.message : "Payment verification failed.";
+            toast.error(message);
+          } finally {
+            setPaying(false);
+          }
         },
         modal: {
           ondismiss: () => {
-            toast.message("Payment window closed.");
+            toast.message("Payment window closed before completion.");
+            setPaying(false);
           },
         },
       });
 
+      instance.on("payment.failed", (response) => {
+        const message = response.error?.description || response.error?.reason || "Payment failed.";
+        toast.error(message);
+        setPaying(false);
+      });
+
+      modalOpened = true;
       instance.open();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Checkout failed";
       toast.error(message);
     } finally {
-      setPaying(false);
+      if (!modalOpened) {
+        setPaying(false);
+      }
     }
   });
 

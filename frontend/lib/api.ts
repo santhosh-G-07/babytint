@@ -237,6 +237,28 @@ export async function createRazorpayOrder(orderId: string) {
   );
 }
 
+export async function verifyRazorpayPayment(payload: {
+  app_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
+}) {
+  return apiFetch<{
+    ok: boolean;
+    status: string;
+    order_id: string;
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+  }>(
+    "/api/payment/verify-payment",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    true,
+  );
+}
+
 export async function getMyOrders() {
   return apiFetch<OrderRecord[]>("/api/orders/me", undefined, true);
 }

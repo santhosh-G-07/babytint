@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import json
 import uuid
 
@@ -30,8 +32,42 @@ class CreateRazorpayOrderRequest(BaseModel):
     notes: dict = Field(default_factory=dict)
 
 
+class VerifyRazorpayPaymentRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    app_order_id: uuid.UUID | None = None
+    razorpay_order_id: str | None = None
+    razorpay_payment_id: str | None = None
+    razorpay_signature: str | None = None
+
+
 def _razorpay_client() -> razorpay.Client:
+    if not settings.razorpay_key_id or not settings.razorpay_key_secret:
+        raise HTTPException(status_code=401, detail="Razorpay credentials are not configured.")
     return razorpay.Client(auth=(settings.razorpay_key_id, settings.razorpay_key_secret))
+
+
+def _is_razorpay_auth_failure(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "authentication" in message or "unauthorized" in message or "invalid key" in message
+
+
+def _mark_order_paid(
+    order: Order,
+    razorpay_payment_id: str,
+    db: Session,
+    background_tasks: BackgroundTasks,
+) -> None:
+    order.razorpay_payment_id = razorpay_payment_id
+    order.payment_status = PaymentStatus.paid
+    order.status = OrderStatus.printing
+    for item in order.items:
+        item.print_file_status = PrintFileStatus.generating
+        item.print_file_error = None
+    db.commit()
+
+    for item in order.items:
+        background_tasks.add_task(generate_order_item_print_file, str(item.id))
 
 
 @router.post("/create-order")
@@ -48,6 +84,11 @@ def create_razorpay_order(
 
     # Security-critical: never trust any client-side amount.
     amount_paise = int(order.total_amount * 100)
+    if amount_paise < 100:
+        raise HTTPException(status_code=400, detail="Minimum payment amount is 100 paise.")
+    if order.payment_status == PaymentStatus.paid:
+        raise HTTPException(status_code=400, detail="This order is already paid.")
+
     client = _razorpay_client()
 
     try:
@@ -59,9 +100,16 @@ def create_razorpay_order(
                 "notes": payload.notes,
             }
         )
-    except RAZORPAY_CREATE_ORDER_ERRORS as exc:
+    except razorpay.errors.BadRequestError as exc:
+        if _is_razorpay_auth_failure(exc):
+            raise HTTPException(status_code=401, detail="Razorpay authentication failed.") from exc
         raise HTTPException(
-            status_code=502,
+            status_code=500,
+            detail="Payment provider order creation failed. Please retry shortly.",
+        ) from exc
+    except (razorpay.errors.GatewayError, razorpay.errors.ServerError) as exc:
+        raise HTTPException(
+            status_code=500,
             detail="Payment provider order creation failed. Please retry shortly.",
         ) from exc
 
@@ -73,6 +121,62 @@ def create_razorpay_order(
         "currency": razorpay_order["currency"],
         "status": razorpay_order["status"],
         "receipt": razorpay_order.get("receipt"),
+    }
+
+
+@router.post("/verify-payment")
+def verify_razorpay_payment(
+    payload: VerifyRazorpayPaymentRequest,
+    background_tasks: BackgroundTasks,
+    current: AuthUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    if not payload.razorpay_order_id or not payload.razorpay_payment_id or not payload.razorpay_signature:
+        raise HTTPException(status_code=400, detail="Missing Razorpay payment verification fields.")
+    if not settings.razorpay_key_secret:
+        raise HTTPException(status_code=401, detail="Razorpay key secret is not configured.")
+
+    query = select(Order).options(joinedload(Order.items))
+    if payload.app_order_id is not None:
+        query = query.where(Order.id == payload.app_order_id)
+    else:
+        query = query.where(Order.razorpay_order_id == payload.razorpay_order_id)
+
+    order = db.scalar(query)
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found.")
+    if str(order.user_id) != current.id:
+        raise HTTPException(status_code=403, detail="You cannot verify payment for this order.")
+    if not order.razorpay_order_id or order.razorpay_order_id != payload.razorpay_order_id:
+        raise HTTPException(status_code=400, detail="Razorpay order does not match this order.")
+
+    signature_payload = f"{order.razorpay_order_id}|{payload.razorpay_payment_id}"
+    generated_signature = hmac.new(
+        settings.razorpay_key_secret.encode("utf-8"),
+        signature_payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(generated_signature, payload.razorpay_signature):
+        raise HTTPException(status_code=400, detail="Invalid Razorpay payment signature.")
+
+    if order.payment_status == PaymentStatus.paid:
+        if order.razorpay_payment_id != payload.razorpay_payment_id:
+            raise HTTPException(status_code=400, detail="Order is already paid with a different payment.")
+        return {
+            "ok": True,
+            "status": order.payment_status.value,
+            "order_id": str(order.id),
+            "razorpay_order_id": order.razorpay_order_id,
+            "razorpay_payment_id": order.razorpay_payment_id,
+        }
+
+    _mark_order_paid(order, payload.razorpay_payment_id, db, background_tasks)
+    return {
+        "ok": True,
+        "status": order.payment_status.value,
+        "order_id": str(order.id),
+        "razorpay_order_id": order.razorpay_order_id,
+        "razorpay_payment_id": order.razorpay_payment_id,
     }
 
 
@@ -132,15 +236,5 @@ async def razorpay_webhook(
         db.commit()
         return {"ok": True}
 
-    order.razorpay_payment_id = razorpay_payment_id
-    order.payment_status = PaymentStatus.paid
-    order.status = OrderStatus.printing
-    for item in order.items:
-        item.print_file_status = PrintFileStatus.generating
-        item.print_file_error = None
-    db.commit()
-
-    for item in order.items:
-        background_tasks.add_task(generate_order_item_print_file, str(item.id))
-
+    _mark_order_paid(order, razorpay_payment_id, db, background_tasks)
     return {"ok": True}

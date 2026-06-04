@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import uuid
 from decimal import Decimal
 from types import SimpleNamespace
@@ -7,7 +9,7 @@ import razorpay
 from app.api import payment
 from app.core.auth import AuthUser, get_current_user
 from app.core.database import get_db
-from app.models.order import OrderStatus
+from app.models.order import OrderStatus, PaymentStatus, PrintFileStatus
 
 
 class FakeDB:
@@ -104,6 +106,7 @@ def test_create_order_handles_provider_failure(client, monkeypatch):
         user_id=user_id,
         total_amount=Decimal("1598.00"),
         razorpay_order_id=None,
+        payment_status=PaymentStatus.pending,
     )
     fake_db = FakeDB(order)
 
@@ -139,5 +142,186 @@ def test_create_order_handles_provider_failure(client, monkeypatch):
         json={"order_id": str(order_id)},
     )
 
-    assert response.status_code == 502
-    assert response.json()["detail"] == "Payment provider order creation failed. Please retry shortly."
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Razorpay authentication failed."
+
+
+def test_create_order_rejects_amount_below_minimum(client, monkeypatch):
+    user_id = uuid.uuid4()
+    order_id = uuid.uuid4()
+    order = SimpleNamespace(
+        id=order_id,
+        user_id=user_id,
+        total_amount=Decimal("0.50"),
+        razorpay_order_id=None,
+        payment_status=PaymentStatus.pending,
+    )
+    fake_db = FakeDB(order)
+
+    def fake_get_db():
+        yield fake_db
+
+    async def fake_get_current_user():
+        return AuthUser(
+            id=str(user_id),
+            email="user@example.com",
+            name="User",
+            role="customer",
+            access_token="test-token",
+        )
+
+    from app.main import app
+
+    app.dependency_overrides[get_db] = fake_get_db
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+
+    response = client.post(
+        "/api/payment/create-order",
+        json={"order_id": str(order_id)},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Minimum payment amount is 100 paise."
+    assert fake_db.commits == 0
+
+
+def test_verify_payment_marks_paid_after_signature_match(client, monkeypatch):
+    user_id = uuid.uuid4()
+    order_id = uuid.uuid4()
+    razorpay_order_id = "order_test_123"
+    razorpay_payment_id = "pay_test_001"
+    signature = hmac.new(
+        payment.settings.razorpay_key_secret.encode("utf-8"),
+        f"{razorpay_order_id}|{razorpay_payment_id}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    order_item = SimpleNamespace(id=uuid.uuid4(), print_file_status=PrintFileStatus.pending, print_file_error="old")
+    order = SimpleNamespace(
+        id=order_id,
+        user_id=user_id,
+        razorpay_order_id=razorpay_order_id,
+        razorpay_payment_id=None,
+        payment_status=PaymentStatus.pending,
+        status=OrderStatus.received,
+        items=[order_item],
+    )
+    fake_db = FakeDB(order)
+    called_item_ids: list[str] = []
+
+    def fake_get_db():
+        yield fake_db
+
+    async def fake_get_current_user():
+        return AuthUser(
+            id=str(user_id),
+            email="user@example.com",
+            name="User",
+            role="customer",
+            access_token="test-token",
+        )
+
+    def fake_generate_order_item_print_file(item_id: str):
+        called_item_ids.append(item_id)
+
+    monkeypatch.setattr(payment, "generate_order_item_print_file", fake_generate_order_item_print_file)
+
+    from app.main import app
+
+    app.dependency_overrides[get_db] = fake_get_db
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+
+    response = client.post(
+        "/api/payment/verify-payment",
+        json={
+            "app_order_id": str(order_id),
+            "razorpay_order_id": razorpay_order_id,
+            "razorpay_payment_id": razorpay_payment_id,
+            "razorpay_signature": signature,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert order.payment_status == PaymentStatus.paid
+    assert order.status == OrderStatus.printing
+    assert order.razorpay_payment_id == razorpay_payment_id
+    assert order_item.print_file_status == PrintFileStatus.generating
+    assert order_item.print_file_error is None
+    assert fake_db.commits == 1
+    assert called_item_ids == [str(order_item.id)]
+
+
+def test_verify_payment_rejects_signature_mismatch_without_marking_paid(client):
+    user_id = uuid.uuid4()
+    order_id = uuid.uuid4()
+    order = SimpleNamespace(
+        id=order_id,
+        user_id=user_id,
+        razorpay_order_id="order_test_123",
+        razorpay_payment_id=None,
+        payment_status=PaymentStatus.pending,
+        status=OrderStatus.received,
+        items=[],
+    )
+    fake_db = FakeDB(order)
+
+    def fake_get_db():
+        yield fake_db
+
+    async def fake_get_current_user():
+        return AuthUser(
+            id=str(user_id),
+            email="user@example.com",
+            name="User",
+            role="customer",
+            access_token="test-token",
+        )
+
+    from app.main import app
+
+    app.dependency_overrides[get_db] = fake_get_db
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+
+    response = client.post(
+        "/api/payment/verify-payment",
+        json={
+            "app_order_id": str(order_id),
+            "razorpay_order_id": "order_test_123",
+            "razorpay_payment_id": "pay_test_001",
+            "razorpay_signature": "bad-signature",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid Razorpay payment signature."
+    assert order.payment_status == PaymentStatus.pending
+    assert fake_db.commits == 0
+
+
+def test_verify_payment_rejects_missing_fields(client):
+    user_id = uuid.uuid4()
+
+    def fake_get_db():
+        yield FakeDB(None)
+
+    async def fake_get_current_user():
+        return AuthUser(
+            id=str(user_id),
+            email="user@example.com",
+            name="User",
+            role="customer",
+            access_token="test-token",
+        )
+
+    from app.main import app
+
+    app.dependency_overrides[get_db] = fake_get_db
+    app.dependency_overrides[get_current_user] = fake_get_current_user
+
+    response = client.post(
+        "/api/payment/verify-payment",
+        json={"razorpay_order_id": "order_test_123"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Missing Razorpay payment verification fields."
