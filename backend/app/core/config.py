@@ -8,8 +8,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
-        env_file_encoding="utf-8",
+        env_file_encoding="utf-8-sig",
         case_sensitive=False,
+        extra="ignore",
     )
 
     app_env: str = Field(default="development", alias="APP_ENV")
@@ -31,6 +32,10 @@ class Settings(BaseSettings):
     razorpay_key_id: str = Field(alias="RAZORPAY_KEY_ID")
     razorpay_key_secret: str = Field(alias="RAZORPAY_KEY_SECRET")
     razorpay_webhook_secret: str = Field(default="", alias="RAZORPAY_WEBHOOK_SECRET")
+    delhivery_api_token: str = Field(default="", alias="DELHIVERY_API_TOKEN")
+    delhivery_mode: str = Field(default="production", alias="DELHIVERY_MODE")
+    delhivery_pickup_location: str = Field(default="", alias="DELHIVERY_PICKUP_LOCATION")
+    delhivery_api_base_url: str = Field(default="", alias="DELHIVERY_API_BASE_URL")
     local_auth_token_hours: int = Field(default=24, alias="LOCAL_AUTH_TOKEN_HOURS")
     password_reset_otp_minutes: int = Field(default=10, alias="PASSWORD_RESET_OTP_MINUTES")
 

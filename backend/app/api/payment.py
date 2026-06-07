@@ -13,6 +13,7 @@ from app.core.auth import AuthUser, get_current_user
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.order import Order, OrderStatus, PaymentStatus, PrintFileStatus
+from app.services.email import send_order_paid_email_task
 from app.services.image_composer import generate_order_item_print_file
 
 router = APIRouter(prefix="/payment")
@@ -54,11 +55,13 @@ def _is_razorpay_auth_failure(exc: Exception) -> bool:
 
 def _mark_order_paid(
     order: Order,
-    razorpay_payment_id: str,
+    razorpay_payment_id: str | None,
     db: Session,
     background_tasks: BackgroundTasks,
 ) -> None:
-    order.razorpay_payment_id = razorpay_payment_id
+    was_paid = order.payment_status == PaymentStatus.paid
+    if razorpay_payment_id:
+        order.razorpay_payment_id = razorpay_payment_id
     order.payment_status = PaymentStatus.paid
     order.status = OrderStatus.printing
     for item in order.items:
@@ -68,6 +71,8 @@ def _mark_order_paid(
 
     for item in order.items:
         background_tasks.add_task(generate_order_item_print_file, str(item.id))
+    if not was_paid:
+        background_tasks.add_task(send_order_paid_email_task, str(order.id))
 
 
 @router.post("/create-order")
@@ -205,6 +210,8 @@ async def razorpay_webhook(
             )
         except razorpay.errors.SignatureVerificationError as exc:
             raise HTTPException(status_code=400, detail="Invalid webhook signature.") from exc
+    elif settings.app_env.lower() == "production":
+        raise HTTPException(status_code=503, detail="Razorpay webhook secret is not configured.")
 
     try:
         payload = json.loads(body or "{}")
@@ -235,6 +242,14 @@ async def razorpay_webhook(
         order.payment_status = PaymentStatus.failed
         db.commit()
         return {"ok": True}
+
+    if order.payment_status == PaymentStatus.paid:
+        if razorpay_payment_id and order.razorpay_payment_id and order.razorpay_payment_id != razorpay_payment_id:
+            raise HTTPException(status_code=400, detail="Order is already paid with a different payment.")
+        return {"ok": True}
+
+    if event == "payment.captured" and not razorpay_payment_id:
+        return {"ok": True, "ignored": True}
 
     _mark_order_paid(order, razorpay_payment_id, db, background_tasks)
     return {"ok": True}

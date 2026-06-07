@@ -28,13 +28,16 @@ def test_payment_webhook_marks_printing_and_triggers_jobs(client, monkeypatch):
     order_item_1 = SimpleNamespace(id=uuid.uuid4())
     order_item_2 = SimpleNamespace(id=uuid.uuid4())
     order = SimpleNamespace(
+        id=uuid.uuid4(),
         razorpay_order_id="order_test_123",
         razorpay_payment_id=None,
+        payment_status=PaymentStatus.pending,
         status=OrderStatus.received,
         items=[order_item_1, order_item_2],
     )
     fake_db = FakeDB(order)
     called_item_ids: list[str] = []
+    emailed_order_ids: list[str] = []
 
     def fake_get_db():
         yield fake_db
@@ -42,8 +45,13 @@ def test_payment_webhook_marks_printing_and_triggers_jobs(client, monkeypatch):
     def fake_generate_order_item_print_file(item_id: str):
         called_item_ids.append(str(item_id))
 
+    def fake_send_order_paid_email_task(order_id: str):
+        emailed_order_ids.append(order_id)
+
     monkeypatch.setattr(payment, "generate_order_item_print_file", fake_generate_order_item_print_file)
+    monkeypatch.setattr(payment, "send_order_paid_email_task", fake_send_order_paid_email_task)
     monkeypatch.setattr(payment.settings, "razorpay_webhook_secret", "")
+    monkeypatch.setattr(payment.settings, "app_env", "development")
 
     from app.main import app
 
@@ -70,10 +78,66 @@ def test_payment_webhook_marks_printing_and_triggers_jobs(client, monkeypatch):
     assert order.razorpay_payment_id == "pay_test_001"
     assert fake_db.commits == 1
     assert called_item_ids == [str(order_item_1.id), str(order_item_2.id)]
+    assert emailed_order_ids == [str(order.id)]
+
+
+def test_payment_webhook_ignores_duplicate_paid_event(client, monkeypatch):
+    order_item = SimpleNamespace(id=uuid.uuid4())
+    order = SimpleNamespace(
+        id=uuid.uuid4(),
+        razorpay_order_id="order_test_123",
+        razorpay_payment_id="pay_test_001",
+        payment_status=PaymentStatus.paid,
+        status=OrderStatus.printing,
+        items=[order_item],
+    )
+    fake_db = FakeDB(order)
+    called_item_ids: list[str] = []
+    emailed_order_ids: list[str] = []
+
+    def fake_get_db():
+        yield fake_db
+
+    def fake_generate_order_item_print_file(item_id: str):
+        called_item_ids.append(str(item_id))
+
+    def fake_send_order_paid_email_task(order_id: str):
+        emailed_order_ids.append(order_id)
+
+    monkeypatch.setattr(payment, "generate_order_item_print_file", fake_generate_order_item_print_file)
+    monkeypatch.setattr(payment, "send_order_paid_email_task", fake_send_order_paid_email_task)
+    monkeypatch.setattr(payment.settings, "razorpay_webhook_secret", "")
+    monkeypatch.setattr(payment.settings, "app_env", "development")
+
+    from app.main import app
+
+    app.dependency_overrides[get_db] = fake_get_db
+
+    response = client.post(
+        "/api/payment/webhook",
+        json={
+            "event": "payment.captured",
+            "payload": {
+                "payment": {
+                    "entity": {
+                        "id": "pay_test_001",
+                        "order_id": "order_test_123",
+                    }
+                }
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert fake_db.commits == 0
+    assert called_item_ids == []
+    assert emailed_order_ids == []
 
 
 def test_payment_webhook_rejects_malformed_json(client, monkeypatch):
     monkeypatch.setattr(payment.settings, "razorpay_webhook_secret", "")
+    monkeypatch.setattr(payment.settings, "app_env", "development")
 
     response = client.post(
         "/api/payment/webhook",
@@ -87,6 +151,7 @@ def test_payment_webhook_rejects_malformed_json(client, monkeypatch):
 
 def test_payment_webhook_accepts_utf8_bom(client, monkeypatch):
     monkeypatch.setattr(payment.settings, "razorpay_webhook_secret", "")
+    monkeypatch.setattr(payment.settings, "app_env", "development")
 
     response = client.post(
         "/api/payment/webhook",
@@ -96,6 +161,19 @@ def test_payment_webhook_accepts_utf8_bom(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == {"ok": True, "ignored": True}
+
+
+def test_payment_webhook_requires_secret_in_production(client, monkeypatch):
+    monkeypatch.setattr(payment.settings, "razorpay_webhook_secret", "")
+    monkeypatch.setattr(payment.settings, "app_env", "production")
+
+    response = client.post(
+        "/api/payment/webhook",
+        json={},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Razorpay webhook secret is not configured."
 
 
 def test_create_order_handles_provider_failure(client, monkeypatch):
@@ -207,6 +285,7 @@ def test_verify_payment_marks_paid_after_signature_match(client, monkeypatch):
     )
     fake_db = FakeDB(order)
     called_item_ids: list[str] = []
+    emailed_order_ids: list[str] = []
 
     def fake_get_db():
         yield fake_db
@@ -223,7 +302,11 @@ def test_verify_payment_marks_paid_after_signature_match(client, monkeypatch):
     def fake_generate_order_item_print_file(item_id: str):
         called_item_ids.append(item_id)
 
+    def fake_send_order_paid_email_task(order_id: str):
+        emailed_order_ids.append(order_id)
+
     monkeypatch.setattr(payment, "generate_order_item_print_file", fake_generate_order_item_print_file)
+    monkeypatch.setattr(payment, "send_order_paid_email_task", fake_send_order_paid_email_task)
 
     from app.main import app
 
@@ -249,6 +332,7 @@ def test_verify_payment_marks_paid_after_signature_match(client, monkeypatch):
     assert order_item.print_file_error is None
     assert fake_db.commits == 1
     assert called_item_ids == [str(order_item.id)]
+    assert emailed_order_ids == [str(order.id)]
 
 
 def test_verify_payment_rejects_signature_mismatch_without_marking_paid(client):
