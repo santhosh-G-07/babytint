@@ -116,11 +116,13 @@ export default function AdminOrdersPage() {
           </p>
         ) : null}
 
-        {data?.map((order) => (
-          <div
-            key={order.id}
-            className="rounded-2xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900"
-          >
+        {data?.map((order) => {
+          const isPaid = order.payment_status === "paid";
+          return (
+            <div
+              key={order.id}
+              className="rounded-2xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900"
+            >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="font-semibold">Order #{order.id.slice(0, 8)}</p>
@@ -157,6 +159,11 @@ export default function AdminOrdersPage() {
                   <p>Payment ID: {order.razorpay_payment_id ?? "Not captured"}</p>
                   <p>Total: {inr(order.total_amount)}</p>
                 </div>
+                {!isPaid ? (
+                  <p className="mt-3 text-xs font-medium text-amber-700 dark:text-amber-300">
+                    Fulfillment actions stay locked until payment is completed.
+                  </p>
+                ) : null}
               </section>
             </div>
 
@@ -165,6 +172,7 @@ export default function AdminOrdersPage() {
                 <Label>Status</Label>
                 <Select
                   value={order.status}
+                  disabled={!isPaid}
                   onValueChange={(nextStatus) =>
                     mutation.mutate({
                       orderId: order.id,
@@ -201,6 +209,7 @@ export default function AdminOrdersPage() {
               <div className="self-end">
                 <Button
                   variant="outline"
+                  disabled={!isPaid}
                   onClick={() =>
                     mutation.mutate({
                       orderId: order.id,
@@ -243,7 +252,7 @@ export default function AdminOrdersPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => printMutation.mutate(item.id)}
-                      disabled={printMutation.isPending}
+                      disabled={printMutation.isPending || !isPaid}
                     >
                       <RefreshCw className="mr-2 h-4 w-4" />
                       Generate
@@ -251,7 +260,7 @@ export default function AdminOrdersPage() {
                     <Button
                       size="sm"
                       onClick={() => void handleDownload(item)}
-                      disabled={downloadingItemId === item.id}
+                      disabled={downloadingItemId === item.id || !isPaid}
                     >
                       <Download className="mr-2 h-4 w-4" />
                       {downloadingItemId === item.id ? "Preparing..." : "Full-HD PNG"}
@@ -260,8 +269,9 @@ export default function AdminOrdersPage() {
                 </div>
               ))}
             </div>
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -36,6 +36,11 @@ class CustomizationPayload(BaseModel):
 class CartItemCreate(BaseModel):
     frame_id: uuid.UUID
     customization_data: dict[str, Any]
+    quantity: int = Field(default=1, ge=1)
+
+
+class CartItemUpdate(BaseModel):
+    quantity: int = Field(ge=1)
 
 
 class CartItemRead(BaseModel):
@@ -45,6 +50,7 @@ class CartItemRead(BaseModel):
     user_id: uuid.UUID
     frame_id: uuid.UUID
     customization_data: dict[str, Any]
+    quantity: int
     created_at: datetime
 
 

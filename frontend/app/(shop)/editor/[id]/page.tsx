@@ -132,6 +132,11 @@ export default function EditorPage() {
 
   const cartItems = useCartStore((state) => state.cart);
   const addToCart = useCartStore((state) => state.addToCart);
+  const replaceCartItem = useCartStore((state) => state.replaceCartItem);
+  const existingCartItem =
+    cartItemIdFromQuery
+      ? cartItems.find((item) => item.id === cartItemIdFromQuery && item.frame.id === frame?.id)
+      : null;
 
   useEffect(() => {
     if (!frame) {
@@ -144,9 +149,7 @@ export default function EditorPage() {
     editorInitKeyRef.current = initKey;
 
     loadedCartItemIdRef.current = null;
-    if (!cartItemIdFromQuery) {
-      clearEditor();
-    }
+    clearEditor();
     initializeFrame(frame.id, frame.slot_positions.map((slot) => slot.slot_id), frame.text_positions);
   }, [cartItemIdFromQuery, clearEditor, frame, initializeFrame]);
 
@@ -154,15 +157,12 @@ export default function EditorPage() {
     if (!frame || !cartItemIdFromQuery || loadedCartItemIdRef.current === cartItemIdFromQuery) {
       return;
     }
-    const cartItem = cartItems.find(
-      (item) => item.id === cartItemIdFromQuery && item.frame.id === frame.id,
-    );
-    if (!cartItem) {
+    if (!existingCartItem) {
       return;
     }
-    loadCustomization(cartItem.customization);
+    loadCustomization(existingCartItem.customization);
     loadedCartItemIdRef.current = cartItemIdFromQuery;
-  }, [cartItemIdFromQuery, cartItems, frame, loadCustomization]);
+  }, [cartItemIdFromQuery, existingCartItem, frame, loadCustomization]);
 
   useEffect(() => {
     return () => {
@@ -258,6 +258,10 @@ export default function EditorPage() {
     if (!frame) {
       return;
     }
+    if (!frame.is_active) {
+      toast.error("This frame is no longer available for new orders.");
+      return;
+    }
 
     const missingSlot = frame.slot_positions.find((slot) => !slots[slot.slot_id]?.image_url);
     if (missingSlot) {
@@ -276,7 +280,8 @@ export default function EditorPage() {
       try {
         await authMe();
       } catch {
-        router.push(`/login?next=${encodeURIComponent(`/editor/${frameRef}`)}`);
+        const nextPath = `/editor/${frameRef}${cartItemIdFromQuery ? `?cart_item=${encodeURIComponent(cartItemIdFromQuery)}` : ""}`;
+        router.push(`/login?next=${encodeURIComponent(nextPath)}`);
         return;
       }
     }
@@ -324,23 +329,34 @@ export default function EditorPage() {
     }
 
     const effectivePrice = Number(frame.offer_price ?? frame.price);
-    addToCart({
-      frame,
-      quantity: 1,
-      price: effectivePrice,
-      customization: finalizedCustomization,
-    });
+    const quantity = existingCartItem?.quantity ?? 1;
+    if (existingCartItem) {
+      replaceCartItem(existingCartItem.id, {
+        frame,
+        quantity,
+        price: effectivePrice,
+        customization: finalizedCustomization,
+      });
+    } else {
+      addToCart({
+        frame,
+        quantity,
+        price: effectivePrice,
+        customization: finalizedCustomization,
+      });
+    }
 
     try {
       await addServerCartItem({
         frame_id: frame.id,
+        quantity,
         customization_data: finalizedCustomization,
       });
     } catch {
       // Keep local cart even if server cart sync fails.
     }
 
-    toast.success("Added to cart.");
+    toast.success(existingCartItem ? "Cart item updated." : "Added to cart.");
     router.push("/cart");
   };
 
@@ -373,6 +389,22 @@ export default function EditorPage() {
       <div className="container-shell py-8">
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">
           Frame not found.
+        </div>
+      </div>
+    );
+  }
+
+  if (!frame.is_active) {
+    return (
+      <div className="container-shell py-8">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+          <h2 className="text-lg font-semibold">Frame unavailable</h2>
+          <p className="mt-2">
+            This design is no longer available for checkout. Please return to the shop and choose an active frame.
+          </p>
+          <Button className="mt-4" variant="outline" onClick={() => router.push("/shop")}>
+            Back to shop
+          </Button>
         </div>
       </div>
     );

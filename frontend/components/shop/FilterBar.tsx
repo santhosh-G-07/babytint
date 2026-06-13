@@ -35,8 +35,8 @@ export function FilterBar({
 }) {
   return (
     <div className="surface p-4 sm:p-5">
-      <div className="grid gap-3 md:grid-cols-5">
-        <div className="relative md:col-span-2">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_180px_180px_minmax(0,0.9fr)_auto] xl:items-start">
+        <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
           <Input
             placeholder="Search frame name..."
@@ -45,6 +45,7 @@ export function FilterBar({
             className="pl-9"
           />
         </div>
+
         <Select value={value.size || "all"} onValueChange={(next) => onChange({ size: next === "all" ? "" : next })}>
           <SelectTrigger>
             <SelectValue placeholder="Size" />
@@ -58,6 +59,7 @@ export function FilterBar({
             ))}
           </SelectContent>
         </Select>
+
         <Select
           value={value.category || "all"}
           onValueChange={(next) => onChange({ category: next === "all" ? "" : next })}
@@ -74,26 +76,28 @@ export function FilterBar({
             ))}
           </SelectContent>
         </Select>
-        <div className="flex gap-2">
+
+        <div className="grid grid-cols-2 gap-2">
           <Input
             type="number"
-            placeholder="Min ₹"
+            placeholder="Min Rs"
             value={value.minPrice}
             onChange={(event) => onChange({ minPrice: event.target.value })}
           />
           <Input
             type="number"
-            placeholder="Max ₹"
+            placeholder="Max Rs"
             value={value.maxPrice}
             onChange={(event) => onChange({ maxPrice: event.target.value })}
           />
         </div>
-      </div>
-      <div className="mt-3 flex justify-end">
-        <Button variant="ghost" onClick={onReset}>
-          <SlidersHorizontal className="mr-2 h-4 w-4" />
-          Reset Filters
-        </Button>
+
+        <div className="xl:justify-self-end">
+          <Button variant="ghost" className="w-full xl:w-auto" onClick={onReset}>
+            <SlidersHorizontal className="mr-2 h-4 w-4" />
+            Reset Filters
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -24,6 +24,7 @@ class Frame(Base):
     offer_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     frame_asset_url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    preview_image_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     slot_positions: Mapped[list[dict]] = mapped_column(json_type, nullable=False, default=list)
     text_positions: Mapped[list[dict]] = mapped_column(json_type, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(

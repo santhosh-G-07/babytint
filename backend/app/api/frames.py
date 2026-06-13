@@ -26,6 +26,7 @@ def list_frames(
     active_only: bool = Query(default=True),
 ) -> list[Frame]:
     filters = []
+    effective_price = func.coalesce(Frame.offer_price, Frame.price)
     if active_only:
         filters.append(Frame.is_active.is_(True))
     if size:
@@ -35,9 +36,9 @@ def list_frames(
     if name_exact:
         filters.append(func.lower(Frame.name) == name_exact.strip().lower())
     if min_price is not None:
-        filters.append(Frame.price >= min_price)
+        filters.append(effective_price >= min_price)
     if max_price is not None:
-        filters.append(Frame.price <= max_price)
+        filters.append(effective_price <= max_price)
     if search:
         term = f"%{search.lower()}%"
         filters.append(or_(func.lower(Frame.name).like(term), func.lower(Frame.slug).like(term)))

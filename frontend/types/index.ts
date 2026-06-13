@@ -63,6 +63,7 @@ export interface FrameTemplate {
   offer_price: string | null;
   is_active: boolean;
   frame_asset_url: string;
+  preview_image_url: string | null;
   slot_positions: SlotPosition[];
   text_positions: TextPosition[];
   created_at: string;

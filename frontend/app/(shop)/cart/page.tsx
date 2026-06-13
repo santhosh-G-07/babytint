@@ -16,6 +16,7 @@ export default function CartPage() {
 
   const previewItem = cart.find((item) => item.id === previewItemId) ?? null;
   const previewUrl = previewItem?.customization.composite_preview_url ?? previewItem?.frame.frame_asset_url ?? null;
+  const hasUnavailableItems = cart.some((item) => !item.frame.is_active);
 
   return (
     <AuthGuard>
@@ -33,14 +34,21 @@ export default function CartPage() {
             </Button>
           </div>
         ) : (
-          <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
+          <div className="mt-6 space-y-5">
+            {hasUnavailableItems ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+                One or more items in your cart are no longer available. Remove them before checkout.
+              </div>
+            ) : null}
+
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-4">
               {cart.map((item) => (
                 <div
                   key={item.id}
                   className="rounded-2xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900"
                 >
-                  <div className="flex items-start gap-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                     <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-stone-200 bg-stone-50 dark:border-stone-800 dark:bg-stone-950">
                       <Image
                         src={item.frame.frame_asset_url}
@@ -50,7 +58,14 @@ export default function CartPage() {
                       />
                     </div>
                     <div className="flex-1">
-                      <h2 className="font-semibold">{item.frame.name}</h2>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="font-semibold">{item.frame.name}</h2>
+                        {!item.frame.is_active ? (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+                            Unavailable
+                          </span>
+                        ) : null}
+                      </div>
                       <p className="text-sm text-stone-500 dark:text-stone-400">
                         {item.frame.size} | {item.frame.slot_count} slots
                       </p>
@@ -95,7 +110,7 @@ export default function CartPage() {
                         </Button>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-left sm:text-right">
                       <p className="font-semibold">{inr(item.price * item.quantity)}</p>
                     </div>
                   </div>
@@ -111,7 +126,7 @@ export default function CartPage() {
               </div>
               <div className="mt-2 flex items-center justify-between text-sm">
                 <span className="text-stone-500 dark:text-stone-400">Shipping</span>
-                <span>Calculated at checkout</span>
+                <span>Free</span>
               </div>
               <div className="mt-4 border-t border-stone-200 pt-4 dark:border-stone-800">
                 <div className="flex items-center justify-between">
@@ -119,10 +134,17 @@ export default function CartPage() {
                   <span className="text-xl font-semibold">{inr(subtotal())}</span>
                 </div>
               </div>
-              <Button className="mt-4 w-full" asChild>
-                <Link href="/checkout">Proceed to Checkout</Link>
-              </Button>
+              {hasUnavailableItems ? (
+                <Button className="mt-4 w-full" disabled>
+                  Remove unavailable items
+                </Button>
+              ) : (
+                <Button className="mt-4 w-full" asChild>
+                  <Link href="/checkout">Proceed to Checkout</Link>
+                </Button>
+              )}
             </div>
+          </div>
           </div>
         )}
       </div>

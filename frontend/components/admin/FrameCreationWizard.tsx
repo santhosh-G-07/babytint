@@ -497,6 +497,7 @@ export function FrameCreationWizard({ onClose, onCreated }: FrameCreationWizardP
         offer_price: details.offerPrice ? String(Number(details.offerPrice) || 0) : null,
         is_active: details.isActive,
         frame_asset_url: uploaded.url,
+        preview_image_url: null,
         slot_positions: slotPositions,
         text_positions: textPositions,
       });

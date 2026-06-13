@@ -23,7 +23,7 @@ export default function ShippingReturnsPage() {
             <li>Order processing starts after payment confirmation.</li>
             <li>Typical print + dispatch time is 2-4 business days.</li>
             <li>Standard delivery usually takes 3-7 business days after dispatch, depending on pincode serviceability.</li>
-            <li>Shipping charges, if any, are shown during checkout before payment.</li>
+            <li>Current storefront orders do not add a separate shipping fee at checkout.</li>
             <li>Tracking link is shared once order status becomes dispatched.</li>
           </ul>
         </article>

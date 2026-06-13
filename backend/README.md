@@ -6,9 +6,13 @@ FastAPI backend for BabyTint Photography.
 
 ```bash
 pip install -r requirements.txt
-alembic upgrade head
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+The local SQLite database is created and upgraded by the application bootstrap at startup. Do not run
+`alembic upgrade head` against an existing bootstrap-created SQLite database.
+
+For a fresh database managed entirely by Alembic, run `alembic upgrade head` before starting Uvicorn.
 
 ## Env (`.env`)
 

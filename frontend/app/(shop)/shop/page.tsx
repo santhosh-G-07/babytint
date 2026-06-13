@@ -92,6 +92,12 @@ export default function ShopPage() {
             ))
           : data?.map((frame) => <FrameCard key={frame.id} frame={frame} />)}
       </div>
+
+      {!isLoading && !error && data?.length === 0 ? (
+        <div className="mt-6 rounded-2xl border border-stone-200 p-5 text-sm text-stone-600 dark:border-stone-800 dark:text-stone-300">
+          No frames matched these filters. Try clearing the search or price range.
+        </div>
+      ) : null}
     </div>
   );
 }

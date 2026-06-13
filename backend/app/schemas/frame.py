@@ -55,6 +55,7 @@ class FrameBase(BaseModel):
     offer_price: Decimal | None = Field(default=None, gt=0)
     is_active: bool = True
     frame_asset_url: str
+    preview_image_url: str | None = None
     slot_positions: list[SlotPosition]
     text_positions: list[TextPosition] = Field(default_factory=list)
 
@@ -73,6 +74,7 @@ class FrameUpdate(BaseModel):
     offer_price: Decimal | None = Field(default=None, gt=0)
     is_active: bool | None = None
     frame_asset_url: str | None = None
+    preview_image_url: str | None = None
     slot_positions: list[SlotPosition] | None = None
     text_positions: list[TextPosition] | None = None
 
@@ -90,6 +92,7 @@ class FrameRead(BaseModel):
     offer_price: Decimal | None
     is_active: bool
     frame_asset_url: str
+    preview_image_url: str | None
     slot_positions: list[SlotPosition]
     text_positions: list[TextPosition]
     created_at: datetime

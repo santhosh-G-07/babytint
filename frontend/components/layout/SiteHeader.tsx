@@ -30,11 +30,11 @@ const links = [
 ];
 
 const announcementItems = [
-  "Weekend Offer: Up to 18% OFF on selected BabyTint frames",
-  "Recent sale: White 12x8 Frame sold in Bengaluru",
-  "Recent sale: 2-slot frame sold in Hyderabad",
+  "Live preview customization for every active frame",
+  "Secure Razorpay checkout for customer orders",
+  "Order tracking updates after payment confirmation",
   "Free design help on WhatsApp and email",
-  "Secure Razorpay checkout and pan-India delivery",
+  "Print-ready export workflow for production orders",
 ];
 
 export function SiteHeader() {

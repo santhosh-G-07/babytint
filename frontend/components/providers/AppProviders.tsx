@@ -48,7 +48,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         <CartSync />
         {children}
         <Toaster richColors position="top-right" />
-        <ReactQueryDevtools initialIsOpen={false} />
+        {process.env.NODE_ENV !== "production" ? <ReactQueryDevtools initialIsOpen={false} /> : null}
       </QueryClientProvider>
     </ThemeProvider>
   );

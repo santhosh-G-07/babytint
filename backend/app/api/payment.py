@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.auth import AuthUser, get_current_user
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.models.order import Order, OrderStatus, PaymentStatus, PrintFileStatus
+from app.models.order import Order, OrderItem, OrderStatus, PaymentStatus, PrintFileStatus
 from app.services.email import send_order_paid_email_task
 from app.services.image_composer import generate_order_item_print_file
 
@@ -53,6 +53,13 @@ def _is_razorpay_auth_failure(exc: Exception) -> bool:
     return "authentication" in message or "unauthorized" in message or "invalid key" in message
 
 
+def _unique_first(db: Session, statement):
+    scalars = getattr(db, "scalars", None)
+    if callable(scalars):
+        return scalars(statement).unique().first()
+    return db.scalar(statement)
+
+
 def _mark_order_paid(
     order: Order,
     razorpay_payment_id: str | None,
@@ -81,11 +88,18 @@ def create_razorpay_order(
     current: AuthUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    order = db.scalar(select(Order).where(Order.id == payload.order_id))
+    order = _unique_first(
+        db,
+        select(Order)
+        .where(Order.id == payload.order_id)
+        .options(joinedload(Order.items).joinedload(OrderItem.frame)),
+    )
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found.")
     if str(order.user_id) != current.id:
         raise HTTPException(status_code=403, detail="You cannot pay for this order.")
+    if any(item.frame is not None and not item.frame.is_active for item in getattr(order, "items", [])):
+        raise HTTPException(status_code=400, detail="This order contains a frame that is no longer available.")
 
     # Security-critical: never trust any client-side amount.
     amount_paise = int(order.total_amount * 100)
@@ -93,6 +107,8 @@ def create_razorpay_order(
         raise HTTPException(status_code=400, detail="Minimum payment amount is 100 paise.")
     if order.payment_status == PaymentStatus.paid:
         raise HTTPException(status_code=400, detail="This order is already paid.")
+    if order.payment_status == PaymentStatus.refunded:
+        raise HTTPException(status_code=400, detail="Refunded orders cannot be paid again.")
 
     client = _razorpay_client()
 
@@ -147,7 +163,7 @@ def verify_razorpay_payment(
     else:
         query = query.where(Order.razorpay_order_id == payload.razorpay_order_id)
 
-    order = db.scalar(query)
+    order = _unique_first(db, query)
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found.")
     if str(order.user_id) != current.id:
@@ -230,16 +246,19 @@ async def razorpay_webhook(
     if not razorpay_order_id:
         return {"ok": True, "ignored": True}
 
-    order = db.scalar(
+    order = _unique_first(
+        db,
         select(Order)
         .where(Order.razorpay_order_id == razorpay_order_id)
-        .options(joinedload(Order.items))
+        .options(joinedload(Order.items)),
     )
     if order is None:
         return {"ok": True, "ignored": True}
 
     if event == "payment.failed":
         order.payment_status = PaymentStatus.failed
+        if order.status != OrderStatus.delivered:
+            order.status = OrderStatus.received
         db.commit()
         return {"ok": True}
 

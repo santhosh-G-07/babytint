@@ -27,7 +27,7 @@ export default function OrdersPage() {
       <div className="container-shell py-8 sm:py-10">
         <h1 className="text-3xl font-semibold">My Orders</h1>
         <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
-          Track each order from received to doorstep delivery.
+          Track payment, production, dispatch, and delivery in one place.
         </p>
 
         {isLoading ? (
@@ -68,7 +68,12 @@ export default function OrdersPage() {
                     </p>
                     <p className="font-semibold">{inr(order.total_amount)}</p>
                   </div>
-                  <Badge>{statusLabel(order.status)}</Badge>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge>{statusLabel(order.status)}</Badge>
+                    <Badge variant={order.payment_status === "paid" ? "success" : "outline"}>
+                      Payment: {statusLabel(order.payment_status)}
+                    </Badge>
+                  </div>
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -90,7 +95,11 @@ export default function OrdersPage() {
                   <span className="text-stone-500 dark:text-stone-400">
                     {order.items.length} item{order.items.length > 1 ? "s" : ""}
                   </span>
-                  {order.tracking_link ? (
+                  {order.payment_status !== "paid" ? (
+                    <Button size="sm" asChild>
+                      <Link href={`/checkout?order=${encodeURIComponent(order.id)}`}>Complete payment</Link>
+                    </Button>
+                  ) : order.tracking_link ? (
                     <a
                       href={order.tracking_link}
                       target="_blank"
@@ -100,7 +109,9 @@ export default function OrdersPage() {
                       Track shipment
                     </a>
                   ) : (
-                    <span className="text-stone-500 dark:text-stone-400">Tracking link pending</span>
+                    <span className="text-stone-500 dark:text-stone-400">
+                      {order.status === "printing" ? "Printing in progress" : "Tracking link pending"}
+                    </span>
                   )}
                 </div>
               </div>
@@ -111,4 +122,3 @@ export default function OrdersPage() {
     </AuthGuard>
   );
 }
-

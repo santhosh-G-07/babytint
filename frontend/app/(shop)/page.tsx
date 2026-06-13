@@ -17,7 +17,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getFrames } from "@/lib/api";
-import { inr } from "@/lib/utils";
+import { framePreviewClassName, framePreviewUrl, inr } from "@/lib/utils";
 import type { FrameTemplate } from "@/types";
 
 const processSteps = [
@@ -38,7 +38,7 @@ const processSteps = [
   },
   {
     title: "Track order",
-    detail: "Get status updates from placed to dispatched.",
+    detail: "Follow payment, printing, dispatch, and delivery updates from your account.",
     icon: Truck,
   },
 ];
@@ -68,18 +68,21 @@ const ageFinds = [
   },
 ];
 
-const parentStories = [
+const serviceHighlights = [
   {
-    title: "Parents Stories",
-    quote:
-      "The live preview and text controls made it super easy to design exactly what we wanted.",
-    byline: "Anjali, Hyderabad",
+    title: "Preview before payment",
+    detail: "Your saved preview is attached to the order so production can verify the design before printing.",
+    tag: "Design review",
   },
   {
-    title: "Watch the Love",
-    quote:
-      "Frame quality was excellent and the final print came exactly like the editor preview.",
-    byline: "Karthik, Bengaluru",
+    title: "Payment recovery built in",
+    detail: "If the payment window closes or fails, the same order can be resumed without rebuilding the cart.",
+    tag: "Retry flow",
+  },
+  {
+    title: "Status updates after payment",
+    detail: "Orders move from received to printing, then dispatched with a tracking link once shipment is ready.",
+    tag: "Fulfillment",
   },
 ];
 
@@ -97,7 +100,7 @@ const faqPreview = [
   {
     question: "How many frame options do you have now?",
     answer:
-      "Your current store layout highlights 6 primary frames on homepage, while all active templates remain available in the Shop page.",
+      "The homepage highlights a subset of active templates, while the Shop page lists the full active catalog.",
   },
 ];
 
@@ -161,10 +164,10 @@ export default function HomePage() {
                 <Button
                   asChild
                   size="lg"
-                  className="rounded-full border-0 bg-[#04a16b] px-7 text-white hover:bg-[#03875a]"
+                  className="w-full rounded-full border-0 bg-[#04a16b] px-7 text-white hover:bg-[#03875a] sm:w-auto"
                 >
                   <Link href="/shop">
-                    Shop 6 Frames
+                    Browse Frames
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
@@ -172,7 +175,7 @@ export default function HomePage() {
                   asChild
                   variant="outline"
                   size="lg"
-                  className="rounded-full border-[#4d8ce8]/50 bg-white text-[#2f63a7] hover:bg-[#eaf3ff]"
+                  className="w-full rounded-full border-[#4d8ce8]/50 bg-white text-[#2f63a7] hover:bg-[#eaf3ff] sm:w-auto"
                 >
                   <Link href="/orders">Track Order</Link>
                 </Button>
@@ -191,18 +194,18 @@ export default function HomePage() {
             </div>
 
             <div className="relative pt-6">
-              <div className="absolute left-4 top-0 z-10 rounded-full bg-[#fc859a] px-3 py-1 text-xs font-bold text-white shadow-sm">
-                Recent Sale
+              <div className="absolute left-4 top-0 z-10 rounded-full bg-[#4d8ce8] px-3 py-1 text-xs font-bold text-white shadow-sm">
+                Live Preview
               </div>
               <div className="rounded-[1.8rem] border border-[#d6e6ff] bg-white p-4 shadow-lg sm:p-5">
                 <div className="overflow-hidden rounded-2xl border border-[#e3ecff] bg-[linear-gradient(180deg,#f5faff_0%,#fff1f6_100%)] p-4 sm:p-5">
                   <div className="relative mx-auto aspect-[4/5] w-full max-w-[320px] overflow-hidden rounded-xl">
                     {heroFrame ? (
                       <Image
-                        src={heroFrame.frame_asset_url}
+                        src={framePreviewUrl(heroFrame)}
                         alt={heroFrame.name}
                         fill
-                        className="object-contain"
+                        className={framePreviewClassName(heroFrame, "object-cover", "object-contain")}
                         priority
                       />
                     ) : (
@@ -239,8 +242,8 @@ export default function HomePage() {
         <section className="mt-10">
           <div className="flex items-end justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-semibold text-[#19457b] sm:text-3xl">Deals of the Week</h2>
-              <p className="mt-1 text-sm text-[#4b6790]">Handpicked BabyTint frames with current offer price.</p>
+              <h2 className="text-2xl font-semibold text-[#19457b] sm:text-3xl">Featured Frames</h2>
+              <p className="mt-1 text-sm text-[#4b6790]">Active BabyTint frames ready for customization.</p>
             </div>
             <Link href="/shop" className="text-sm font-semibold text-[#fc6488] hover:text-[#e5456d]">
               View all
@@ -256,7 +259,7 @@ export default function HomePage() {
                     <Skeleton className="h-3.5 w-1/2" />
                   </div>
                 ))
-              : featuredSix.map((frame, index) => {
+              : featuredSix.map((frame) => {
                   const finalPrice = Number(frame.offer_price ?? frame.price);
                   const oldPrice = Number(frame.price);
                   const hasDiscount = frame.offer_price !== null && finalPrice < oldPrice;
@@ -268,14 +271,18 @@ export default function HomePage() {
                     >
                       <div className="relative overflow-hidden rounded-xl border border-[#e6efff] bg-[#f7fbff]">
                         <span className="absolute left-2 top-2 z-10 rounded-full bg-[#fc859a] px-2.5 py-1 text-[0.67rem] font-bold text-white">
-                          {index % 2 === 0 ? "Hot Deal" : "Best Seller"}
+                          {hasDiscount ? "Offer" : "Ready to customize"}
                         </span>
                         <div className="relative aspect-[4/4.2]">
                           <Image
-                            src={frame.frame_asset_url}
+                            src={framePreviewUrl(frame)}
                             alt={frame.name}
                             fill
-                            className="object-contain p-3 transition duration-300 group-hover:scale-[1.03]"
+                            className={framePreviewClassName(
+                              frame,
+                              "object-cover transition duration-300 group-hover:scale-[1.03]",
+                              "object-contain p-3 transition duration-300 group-hover:scale-[1.03]",
+                            )}
                           />
                         </div>
                       </div>
@@ -305,20 +312,20 @@ export default function HomePage() {
 
         <section className="mt-11">
           <div className="mb-4 text-center">
-            <h2 className="text-2xl font-semibold text-[#19457b]">Parents Stories</h2>
+            <h2 className="text-2xl font-semibold text-[#19457b]">Order Confidence</h2>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            {parentStories.map((story, index) => (
+          <div className="grid gap-4 md:grid-cols-3">
+            {serviceHighlights.map((story) => (
               <article
                 key={story.title}
                 className="relative overflow-hidden rounded-2xl border border-[#dce9ff] bg-[linear-gradient(135deg,#1f3553_0%,#2f4f7a_62%,#4f7db4_100%)] p-5 text-white shadow-sm"
               >
                 <div className="absolute -right-12 -top-12 h-36 w-36 rounded-full bg-white/10" />
                 <p className="text-sm font-bold text-[#ffe293]">{story.title}</p>
-                <p className="mt-3 text-sm leading-relaxed text-white/90">{story.quote}</p>
-                <p className="mt-4 text-xs font-semibold text-[#ffcbda]">{story.byline}</p>
+                <p className="mt-3 text-sm leading-relaxed text-white/90">{story.detail}</p>
+                <p className="mt-4 text-xs font-semibold text-[#ffcbda]">{story.tag}</p>
                 <span className="absolute right-4 top-4 rounded-full bg-[#fc859a] px-2 py-1 text-[0.64rem] font-bold">
-                  {index === 0 ? "Real Feedback" : "Verified Buyer"}
+                  Verified flow
                 </span>
               </article>
             ))}
@@ -338,7 +345,12 @@ export default function HomePage() {
               >
                 <div className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border border-[#d9e7ff] bg-white sm:h-28 sm:w-28">
                   <div className="relative h-full w-full">
-                    <Image src={item.frame.frame_asset_url} alt={item.category} fill className="object-contain p-3" />
+                    <Image
+                      src={framePreviewUrl(item.frame)}
+                      alt={item.category}
+                      fill
+                      className={framePreviewClassName(item.frame, "object-cover", "object-contain p-3")}
+                    />
                   </div>
                 </div>
                 <p className="mt-2 text-xs font-semibold text-[#29496f]">{item.category}</p>
@@ -380,10 +392,14 @@ export default function HomePage() {
                 >
                   <div className="relative aspect-[5/3.8] bg-[linear-gradient(180deg,#f8fbff_0%,#fff4f7_100%)]">
                     <Image
-                      src={frame.frame_asset_url}
+                      src={framePreviewUrl(frame)}
                       alt={frame.name}
                       fill
-                      className="object-contain p-4 transition duration-300 group-hover:scale-[1.03]"
+                      className={framePreviewClassName(
+                        frame,
+                        "object-cover transition duration-300 group-hover:scale-[1.03]",
+                        "object-contain p-4 transition duration-300 group-hover:scale-[1.03]",
+                      )}
                     />
                   </div>
                   <div className="border-t border-[#e3edff] p-3">

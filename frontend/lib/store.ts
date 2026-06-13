@@ -61,7 +61,18 @@ interface CartStore {
     customization: CustomizationData;
     serverCartItemId?: string;
   }) => void;
+  replaceCartItem: (
+    oldId: string,
+    item: {
+      frame: FrameTemplate;
+      quantity?: number;
+      price: number;
+      customization: CustomizationData;
+      serverCartItemId?: string;
+    },
+  ) => void;
   removeFromCart: (id: string) => void;
+  removeItemsByKeys: (keys: string[]) => void;
   updateQuantity: (id: string, quantity: number) => void;
   markServerCartItem: (id: string, serverCartItemId: string) => void;
   forgetRemovedCartItems: (keys: string[]) => void;
@@ -110,6 +121,60 @@ export const useCartStore = create<CartStore>()(
           removedCartItems: get().removedCartItems.filter((item) => item.key !== syncKey),
         });
       },
+      replaceCartItem: (oldId, { frame, quantity = 1, price, customization, serverCartItemId }) => {
+        const nextId = cartId(frame.id, customization);
+        const nextSyncKey = cartSyncKey(frame.id, customization);
+        const previous = get().cart.find((item) => item.id === oldId);
+        const remainingCart = get().cart.filter((item) => item.id !== oldId);
+        const removedCartItems = get().removedCartItems.filter((item) => item.key !== nextSyncKey);
+
+        if (previous) {
+          const previousKey = previous.sync_key ?? cartSyncKey(previous.frame.id, previous.customization);
+          if (previousKey !== nextSyncKey) {
+            removedCartItems.unshift({
+              key: previousKey,
+              server_cart_item_id: previous.server_cart_item_id,
+            });
+          }
+        }
+
+        const existing = remainingCart.find((item) => item.id === nextId);
+        if (existing) {
+          set({
+            cart: remainingCart.map((item) =>
+              item.id === nextId
+                ? {
+                    ...item,
+                    quantity: item.quantity + quantity,
+                    price,
+                    frame,
+                    customization,
+                    server_cart_item_id: serverCartItemId ?? item.server_cart_item_id,
+                    sync_key: nextSyncKey,
+                  }
+                : item,
+            ),
+            removedCartItems,
+          });
+          return;
+        }
+
+        set({
+          cart: [
+            {
+              id: nextId,
+              frame,
+              quantity,
+              price,
+              customization,
+              sync_key: nextSyncKey,
+              server_cart_item_id: serverCartItemId,
+            },
+            ...remainingCart,
+          ],
+          removedCartItems,
+        });
+      },
       removeFromCart: (id) => {
         const item = get().cart.find((cartItem) => cartItem.id === id);
         if (!item) {
@@ -123,6 +188,29 @@ export const useCartStore = create<CartStore>()(
         });
         set({
           cart: get().cart.filter((cartItem) => cartItem.id !== id),
+          removedCartItems,
+        });
+      },
+      removeItemsByKeys: (keys) => {
+        const keySet = new Set(keys);
+        const removedCartItems = [...get().removedCartItems];
+        const removedKeys = new Set(removedCartItems.map((item) => item.key));
+        const remainingCart = get().cart.filter((item) => {
+          const key = item.sync_key ?? cartSyncKey(item.frame.id, item.customization);
+          if (!keySet.has(key)) {
+            return true;
+          }
+          if (!removedKeys.has(key)) {
+            removedCartItems.push({
+              key,
+              server_cart_item_id: item.server_cart_item_id,
+            });
+            removedKeys.add(key);
+          }
+          return false;
+        });
+        set({
+          cart: remainingCart,
           removedCartItems,
         });
       },
@@ -163,7 +251,24 @@ export const useCartStore = create<CartStore>()(
     }),
     {
       name: "babytint-cart",
-      version: 3,
+      version: 4,
+      migrate: (persistedState) => {
+        const previous = (persistedState ?? {}) as Partial<CartStore>;
+        const cart = Array.isArray(previous.cart)
+          ? previous.cart.map((item) => ({
+              ...item,
+              quantity: Math.max(1, item.quantity ?? 1),
+              sync_key: item.sync_key ?? cartSyncKey(item.frame.id, item.customization),
+            }))
+          : [];
+        return {
+          ...previous,
+          cart,
+          removedCartItems: Array.isArray(previous.removedCartItems)
+            ? previous.removedCartItems
+            : [],
+        } as CartStore;
+      },
     },
   ),
 );

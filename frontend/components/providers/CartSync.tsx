@@ -2,7 +2,14 @@
 
 import { useEffect, useRef } from "react";
 
-import { addServerCartItem, ApiError, getFrame, listServerCart, removeServerCartItem } from "@/lib/api";
+import {
+  addServerCartItem,
+  ApiError,
+  getFrame,
+  listServerCart,
+  removeServerCartItem,
+  updateServerCartItem,
+} from "@/lib/api";
 import { hasAuthToken } from "@/lib/local-admin-auth";
 import { cartSyncKey, useCartStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
@@ -24,6 +31,7 @@ function syncSignature() {
     cart: state.cart
       .map((item) => ({
         key: item.sync_key ?? localKey(item),
+        quantity: item.quantity,
         serverCartItemId: item.server_cart_item_id ?? "",
       }))
       .sort((a, b) => a.key.localeCompare(b.key)),
@@ -158,7 +166,7 @@ export function CartSync() {
               );
               useCartStore.getState().addToCart({
                 frame,
-                quantity: 1,
+                quantity: Math.max(1, serverItem.quantity ?? 1),
                 price: Number(frame.offer_price ?? frame.price),
                 customization,
                 serverCartItemId: serverItem.id,
@@ -212,12 +220,22 @@ export function CartSync() {
           const serverItem = serverByKey.get(key);
           if (serverItem) {
             useCartStore.getState().markServerCartItem(item.id, serverItem.id);
+            if ((serverItem.quantity ?? 1) !== item.quantity) {
+              try {
+                await updateServerCartItem(serverItem.id, {
+                  quantity: item.quantity,
+                });
+              } catch {
+                // Best-effort sync.
+              }
+            }
             continue;
           }
           if (!removedKeys.has(key)) {
             try {
               const created = await addServerCartItem({
                 frame_id: item.frame.id,
+                quantity: item.quantity,
                 customization_data: item.customization,
               });
               useCartStore.getState().markServerCartItem(item.id, created.id);

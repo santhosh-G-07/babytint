@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StorefrontPreviewEditor } from "@/components/admin/StorefrontPreviewEditor";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -76,6 +77,7 @@ function toForm(frame?: FrameTemplate) {
     price: String(frame?.price ?? "0"),
     offer_price: frame?.offer_price ?? "",
     frame_asset_url: frame?.frame_asset_url ?? "",
+    preview_image_url: frame?.preview_image_url ?? "",
     is_active: frame?.is_active ?? true,
     slot_positions: JSON.stringify(frame?.slot_positions ?? JSON.parse(slotSample), null, 2),
     text_positions: JSON.stringify(frame?.text_positions ?? [], null, 2),
@@ -108,6 +110,7 @@ export default function AdminFramesPage() {
         offer_price: form.offer_price ? String(form.offer_price) : null,
         is_active: form.is_active,
         frame_asset_url: form.frame_asset_url,
+        preview_image_url: form.preview_image_url || null,
         slot_positions: parsedSlots,
         text_positions: parsedTextPositions,
       };
@@ -210,7 +213,7 @@ export default function AdminFramesPage() {
               <div>
                 <p className="font-medium">{frame.name}</p>
                 <p className="text-xs text-stone-500 dark:text-stone-400">
-                  {frame.size} • {frame.category} • {inr(frame.offer_price ?? frame.price)}
+                  {frame.size} | {frame.category} | {inr(frame.offer_price ?? frame.price)}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -250,7 +253,7 @@ export default function AdminFramesPage() {
             <Label>Slug</Label>
             <Input value={form.slug} onChange={(event) => setForm({ ...form, slug: event.target.value })} />
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Category</Label>
               <Input value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} />
@@ -260,7 +263,7 @@ export default function AdminFramesPage() {
               <Input value={form.size} onChange={(event) => setForm({ ...form, size: event.target.value })} />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid gap-2 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label>Slots</Label>
               <Input
@@ -314,6 +317,16 @@ export default function AdminFramesPage() {
             {uploading ? (
               <p className="text-xs text-stone-500 dark:text-stone-400">Uploading frame asset...</p>
             ) : null}
+          </div>
+          <div className="space-y-1.5">
+            <Label>Storefront Preview</Label>
+            <StorefrontPreviewEditor
+              value={form.preview_image_url}
+              fallbackUrl={form.frame_asset_url}
+              onChange={(previewImageUrl) =>
+                setForm((prev) => ({ ...prev, preview_image_url: previewImageUrl }))
+              }
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Visual Frame Mapper</Label>

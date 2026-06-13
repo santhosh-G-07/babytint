@@ -181,6 +181,7 @@ export async function listServerCart() {
       user_id: string;
       frame_id: string;
       customization_data: Record<string, unknown>;
+      quantity: number;
       created_at: string;
     }[]
   >("/api/orders/cart", undefined, true);
@@ -188,6 +189,7 @@ export async function listServerCart() {
 
 export async function addServerCartItem(payload: {
   frame_id: string;
+  quantity: number;
   customization_data: unknown;
 }) {
   return apiFetch<{
@@ -195,11 +197,30 @@ export async function addServerCartItem(payload: {
     user_id: string;
     frame_id: string;
     customization_data: Record<string, unknown>;
+    quantity: number;
     created_at: string;
   }>(
     "/api/orders/cart",
     {
       method: "POST",
+      body: JSON.stringify(payload),
+    },
+    true,
+  );
+}
+
+export async function updateServerCartItem(itemId: string, payload: { quantity: number }) {
+  return apiFetch<{
+    id: string;
+    user_id: string;
+    frame_id: string;
+    customization_data: Record<string, unknown>;
+    quantity: number;
+    created_at: string;
+  }>(
+    `/api/orders/cart/${itemId}`,
+    {
+      method: "PATCH",
       body: JSON.stringify(payload),
     },
     true,
@@ -267,6 +288,10 @@ export async function verifyRazorpayPayment(payload: {
 
 export async function getMyOrders() {
   return apiFetch<OrderRecord[]>("/api/orders/me", undefined, true);
+}
+
+export async function getMyOrder(orderId: string) {
+  return apiFetch<OrderRecord>(`/api/orders/me/${orderId}`, undefined, true);
 }
 
 export async function getAdminOrders() {

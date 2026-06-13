@@ -36,8 +36,8 @@ export default function TermsPage() {
         <article className="rounded-2xl border border-stone-200 bg-white p-6 dark:border-stone-800 dark:bg-stone-900">
           <h2 className="text-base font-semibold">3. Pricing, payments, and offers</h2>
           <p className="mt-2">
-            Prices, discounts, and availability can change without notice. Final payable amount,
-            including shipping and taxes (if applicable), is shown at checkout before payment.
+            Prices, discounts, and availability can change without notice. The amount shown during
+            checkout is the final payable total for the current storefront flow.
           </p>
         </article>
 

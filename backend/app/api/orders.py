@@ -11,10 +11,18 @@ from app.core.auth import AuthUser, get_current_user, require_admin
 from app.core.database import get_db
 from app.models.frame import Frame
 from app.models.order import CartItem, Order, OrderItem, OrderStatus, PaymentStatus, PrintFileStatus
-from app.schemas.order import CartItemCreate, CartItemRead, OrderCreate, OrderRead, OrderStatusUpdate
+from app.schemas.order import (
+    CartItemCreate,
+    CartItemRead,
+    CartItemUpdate,
+    OrderCreate,
+    OrderRead,
+    OrderStatusUpdate,
+)
 from app.services.image_composer import compose_print_png, generate_order_item_print_file
 
 router = APIRouter(prefix="/orders")
+FULFILLMENT_STATUSES = {OrderStatus.printing, OrderStatus.dispatched, OrderStatus.delivered}
 
 
 def _order_query():
@@ -26,6 +34,37 @@ def _order_query():
         )
         .order_by(Order.created_at.desc())
     )
+
+
+def _ensure_frame_is_sellable(frame: Frame) -> None:
+    if not frame.is_active:
+        raise HTTPException(status_code=400, detail=f"{frame.name} is no longer available.")
+
+
+def _validate_customization(frame: Frame, customization_data: dict) -> None:
+    if not isinstance(customization_data, dict):
+        raise HTTPException(status_code=400, detail="Customization data is invalid.")
+
+    if str(customization_data.get("frame_id")) != str(frame.id):
+        raise HTTPException(status_code=400, detail="Customization does not match the selected frame.")
+
+    slots = customization_data.get("slots")
+    if not isinstance(slots, list) or not slots:
+        raise HTTPException(status_code=400, detail="Customization must include at least one photo slot.")
+
+    expected_slot_ids = {slot.get("slot_id") for slot in frame.slot_positions if isinstance(slot, dict)}
+    provided_slot_ids: set[int] = set()
+    for slot in slots:
+        if not isinstance(slot, dict):
+            raise HTTPException(status_code=400, detail="Customization slot data is invalid.")
+        slot_id = slot.get("slot_id")
+        image_url = slot.get("image_url")
+        if not isinstance(slot_id, int) or not isinstance(image_url, str) or not image_url.strip():
+            raise HTTPException(status_code=400, detail="Each customization slot needs an uploaded image.")
+        provided_slot_ids.add(slot_id)
+
+    if expected_slot_ids and provided_slot_ids != expected_slot_ids:
+        raise HTTPException(status_code=400, detail="Customization must include all frame photo slots.")
 
 
 @router.get("/me", response_model=list[OrderRead])
@@ -64,6 +103,24 @@ def checkout(
     if len(frames) != len(frame_ids):
         raise HTTPException(status_code=400, detail="One or more selected frames do not exist.")
 
+    prepared_items: list[tuple[Frame, dict, int, Decimal]] = []
+    total_amount = Decimal("0.00")
+    for item in payload.items:
+        frame = frames[item.frame_id]
+        _ensure_frame_is_sellable(frame)
+        _validate_customization(frame, item.customization_data)
+        composite_preview_url = item.customization_data.get("composite_preview_url")
+        if not isinstance(composite_preview_url, str) or not composite_preview_url.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Each order item requires a preview image. Please reopen the editor and save it again.",
+            )
+
+        frame_price = frame.offer_price if frame.offer_price is not None else frame.price
+        item_price = Decimal(frame_price)
+        total_amount += item_price * item.quantity
+        prepared_items.append((frame, item.customization_data, item.quantity, item_price))
+
     order = Order(
         user_id=uuid.UUID(current.id),
         status=OrderStatus.received,
@@ -74,19 +131,14 @@ def checkout(
     db.add(order)
     db.flush()
 
-    for item in payload.items:
-        frame = frames[item.frame_id]
-        # Never trust client-provided prices at checkout.
-        frame_price = frame.offer_price if frame.offer_price is not None else frame.price
-        item_price = Decimal(frame_price)
-        total_amount += item_price * item.quantity
+    for frame, customization_data, quantity, item_price in prepared_items:
         order_item = OrderItem(
             order_id=order.id,
             frame_id=frame.id,
-            customization_data=item.customization_data,
+            customization_data=customization_data,
             print_file_url=None,
             print_file_status=PrintFileStatus.pending,
-            quantity=item.quantity,
+            quantity=quantity,
             price=item_price,
         )
         db.add(order_item)
@@ -118,6 +170,8 @@ def regenerate_print_file(
     db: Session = Depends(get_db),
 ) -> Order:
     item = _admin_order_item(item_id, db)
+    if item.order.payment_status != PaymentStatus.paid:
+        raise HTTPException(status_code=400, detail="Payment must be completed before generating print files.")
     item.print_file_status = PrintFileStatus.generating
     item.print_file_error = None
     db.commit()
@@ -144,6 +198,8 @@ def download_print_file(
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
     item = _admin_order_item(item_id, db)
+    if item.order.payment_status != PaymentStatus.paid:
+        raise HTTPException(status_code=400, detail="Payment must be completed before downloading print files.")
     frame = item.frame
     image_bytes = compose_print_png(
         frame_asset_url=frame.frame_asset_url,
@@ -166,18 +222,47 @@ def update_order_status(
     _: AuthUser = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> Order:
-    order = db.scalar(select(Order).where(Order.id == order_id).options(joinedload(Order.items)))
+    order = (
+        db.scalars(select(Order).where(Order.id == order_id).options(joinedload(Order.items)))
+        .unique()
+        .first()
+    )
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found.")
 
     try:
-        order.status = OrderStatus(payload.status)
+        next_status = OrderStatus(payload.status)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid order status.") from exc
-    order.tracking_link = payload.tracking_link
+
+    if order.payment_status != PaymentStatus.paid and next_status in FULFILLMENT_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="Unpaid orders cannot move into printing, dispatch, or delivery.",
+        )
+
+    order.status = next_status
+    tracking_link = (payload.tracking_link or "").strip()
+    order.tracking_link = tracking_link or None
     db.commit()
     db.refresh(order)
     db.refresh(order, attribute_names=["items"])
+    return order
+
+
+@router.get("/me/{order_id}", response_model=OrderRead)
+def get_my_order(
+    order_id: uuid.UUID,
+    current: AuthUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Order:
+    order = (
+        db.scalars(_order_query().where(Order.id == order_id, Order.user_id == uuid.UUID(current.id)))
+        .unique()
+        .first()
+    )
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found.")
     return order
 
 
@@ -203,6 +288,8 @@ def add_cart_item(
     frame = db.scalar(select(Frame).where(Frame.id == payload.frame_id))
     if frame is None:
         raise HTTPException(status_code=404, detail="Frame not found.")
+    _ensure_frame_is_sellable(frame)
+    _validate_customization(frame, payload.customization_data)
 
     existing = db.scalar(
         select(CartItem).where(
@@ -212,14 +299,40 @@ def add_cart_item(
         )
     )
     if existing is not None:
+        existing.quantity = payload.quantity
+        db.commit()
+        db.refresh(existing)
         return existing
 
     item = CartItem(
         user_id=uuid.UUID(current.id),
         frame_id=payload.frame_id,
         customization_data=payload.customization_data,
+        quantity=payload.quantity,
     )
     db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.patch("/cart/{item_id}", response_model=CartItemRead)
+def update_cart_item(
+    item_id: uuid.UUID,
+    payload: CartItemUpdate,
+    current: AuthUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CartItem:
+    item = db.scalar(select(CartItem).where(CartItem.id == item_id))
+    if item is None or str(item.user_id) != current.id:
+        raise HTTPException(status_code=404, detail="Cart item not found.")
+
+    frame = db.scalar(select(Frame).where(Frame.id == item.frame_id))
+    if frame is None:
+        raise HTTPException(status_code=404, detail="Frame not found.")
+    _ensure_frame_is_sellable(frame)
+
+    item.quantity = payload.quantity
     db.commit()
     db.refresh(item)
     return item

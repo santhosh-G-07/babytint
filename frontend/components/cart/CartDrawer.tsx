@@ -18,6 +18,7 @@ import { inr } from "@/lib/utils";
 
 export function CartDrawer() {
   const { cart, removeFromCart, subtotal } = useCartStore();
+  const hasUnavailableItems = cart.some((item) => !item.frame.is_active);
 
   return (
     <Sheet>
@@ -51,6 +52,11 @@ export function CartDrawer() {
                     <p className="text-sm text-stone-500 dark:text-stone-400">
                       Qty {item.quantity} | {inr(item.price)}
                     </p>
+                    {!item.frame.is_active ? (
+                      <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+                        No longer available for checkout
+                      </p>
+                    ) : null}
                     <div className="mt-2 flex gap-2">
                       <Button variant="outline" size="sm" asChild>
                         <Link href="/cart">View</Link>
@@ -78,13 +84,22 @@ export function CartDrawer() {
               <span className="text-sm text-stone-500 dark:text-stone-400">Subtotal</span>
               <span className="text-lg font-semibold">{inr(subtotal())}</span>
             </div>
+            {hasUnavailableItems ? (
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                Remove unavailable items before checkout.
+              </p>
+            ) : null}
             <div className="grid grid-cols-2 gap-3">
               <Button variant="outline" asChild>
                 <Link href="/cart">View Cart</Link>
               </Button>
-              <Button asChild>
-                <Link href="/checkout">Checkout</Link>
-              </Button>
+              {hasUnavailableItems || cart.length === 0 ? (
+                <Button disabled>Checkout</Button>
+              ) : (
+                <Button asChild>
+                  <Link href="/checkout">Checkout</Link>
+                </Button>
+              )}
             </div>
           </div>
         </div>

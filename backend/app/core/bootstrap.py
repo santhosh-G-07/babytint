@@ -107,6 +107,10 @@ SQLITE_COMPAT_COLUMNS: dict[str, list[str]] = {
     ],
     "frames": [
         "ALTER TABLE frames ADD COLUMN text_positions JSON NOT NULL DEFAULT '[]'",
+        "ALTER TABLE frames ADD COLUMN preview_image_url VARCHAR(1024)",
+    ],
+    "cart_items": [
+        "ALTER TABLE cart_items ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1",
     ],
 }
 

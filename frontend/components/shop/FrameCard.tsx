@@ -4,7 +4,7 @@ import { ArrowUpRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { inr } from "@/lib/utils";
+import { framePreviewClassName, framePreviewUrl, inr } from "@/lib/utils";
 import type { FrameTemplate } from "@/types";
 
 export function FrameCard({ frame }: { frame: FrameTemplate }) {
@@ -21,10 +21,14 @@ export function FrameCard({ frame }: { frame: FrameTemplate }) {
         </div>
         <div className="relative aspect-[4/5] overflow-hidden bg-[radial-gradient(circle_at_16%_18%,rgba(245,158,11,0.16),transparent_36%),linear-gradient(135deg,rgba(255,255,255,0.92),rgba(255,255,255,0.62))] dark:bg-[radial-gradient(circle_at_16%_18%,rgba(245,158,11,0.2),transparent_36%),linear-gradient(135deg,rgba(30,28,26,0.9),rgba(24,22,20,0.76))]">
           <Image
-            src={frame.frame_asset_url}
+            src={framePreviewUrl(frame)}
             alt={frame.name}
             fill
-            className="object-contain p-8 transition duration-500 group-hover:scale-[1.04]"
+            className={framePreviewClassName(
+              frame,
+              "object-cover transition duration-500 group-hover:scale-[1.04]",
+              "object-contain p-8 transition duration-500 group-hover:scale-[1.04]",
+            )}
             sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
           />
         </div>
