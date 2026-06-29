@@ -4,6 +4,7 @@ frontend/node_modules/
 
 # Python
 backend/.venv/
+backend/.venv311/
 __pycache__/
 *.pyc
 

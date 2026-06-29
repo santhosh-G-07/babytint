@@ -4,6 +4,7 @@ from PIL import Image
 
 from app.api import upload
 from app.core.auth import AuthUser, require_admin
+from app.services.storage import StorageUploadResult
 
 
 def _tiny_png() -> bytes:
@@ -25,6 +26,25 @@ def test_upload_image_storage_failure_returns_503(client, monkeypatch):
 
     assert response.status_code == 503
     assert response.json()["detail"] == "Storage service is unavailable. Please try again later."
+
+
+def test_upload_image_rewrites_local_storage_url_for_local_request(client, monkeypatch):
+    def fake_upload(**kwargs):
+        return StorageUploadResult(
+            bucket=kwargs["bucket"],
+            path="abc.png",
+            public_url="https://api.babytintstore.com/local-storage/user-uploads/abc.png",
+        )
+
+    monkeypatch.setattr(upload, "upload_bytes", fake_upload)
+
+    response = client.post(
+        "/api/upload/image",
+        files={"file": ("tiny.png", _tiny_png(), "image/png")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["url"] == "http://testserver/local-storage/user-uploads/abc.png"
 
 
 def test_upload_frame_storage_failure_returns_503(client, monkeypatch):

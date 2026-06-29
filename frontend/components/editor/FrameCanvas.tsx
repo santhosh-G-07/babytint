@@ -333,6 +333,11 @@ function slotPrompt(slot: SlotPosition, index: number) {
   return `Add Photo ${index + 1}`;
 }
 
+function slotPromptFontSize(slot: SlotPosition) {
+  const shortestSide = Math.max(1, Math.min(slot.width, slot.height));
+  return Math.max(28, Math.min(54, shortestSide * 0.12));
+}
+
 function textPrompt(field: TextPosition, index: number) {
   const source = `${field.label ?? ""} ${field.placeholder ?? ""}`.toLowerCase();
   if (source.includes("baby") && source.includes("name")) {
@@ -847,11 +852,11 @@ export function FrameCanvas({
                     />
                     <KonvaText
                       x={slot.x + 10}
-                      y={slot.y + slot.height / 2 - 14}
+                      y={slot.y + slot.height / 2 - slotPromptFontSize(slot) / 2}
                       width={Math.max(20, slot.width - 20)}
                       text={slotPrompt(slot, slotIndex)}
                       preventDefault={false}
-                      fontSize={15}
+                      fontSize={slotPromptFontSize(slot)}
                       fontStyle="bold"
                       fontFamily={fontStack("Poppins")}
                       fill="#1f4e8c"
@@ -932,11 +937,11 @@ export function FrameCanvas({
                     />
                     <KonvaText
                       x={slot.x + 10}
-                      y={slot.y + slot.height / 2 - 14}
+                      y={slot.y + slot.height / 2 - slotPromptFontSize(slot) / 2}
                       width={Math.max(20, slot.width - 20)}
                       text={slotPrompt(slot, slotIndex)}
                       preventDefault={false}
-                      fontSize={15}
+                      fontSize={slotPromptFontSize(slot)}
                       fontStyle="bold"
                       fontFamily={fontStack("Poppins")}
                       fill="#1f4e8c"

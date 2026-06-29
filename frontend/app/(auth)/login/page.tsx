@@ -11,13 +11,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { adminLogin, loginLocal } from "@/lib/api";
 import { clearAdminToken, setAuthToken } from "@/lib/local-admin-auth";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { assertSupabaseReachable, isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const nextPath = () => {
     if (typeof window === "undefined") {
@@ -83,13 +84,18 @@ export default function LoginPage() {
   };
 
   const signInWithGoogle = async () => {
+    if (googleLoading) {
+      return;
+    }
     if (!isSupabaseConfigured) {
       toast.error("Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
       return;
     }
 
     const redirectTo = `${window.location.origin}${nextPath()}`;
+    setGoogleLoading(true);
     try {
+      await assertSupabaseReachable();
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo },
@@ -97,8 +103,10 @@ export default function LoginPage() {
       if (error) {
         toast.error(error.message);
       }
-    } catch {
-      toast.error("Could not reach Supabase. Check your env vars and internet connection.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not reach Supabase.");
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -122,8 +130,8 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <Button variant="outline" className="mt-3 w-full" onClick={signInWithGoogle}>
-          Continue with Google
+        <Button variant="outline" className="mt-3 w-full" onClick={signInWithGoogle} disabled={googleLoading}>
+          {googleLoading ? "Checking Google login..." : "Continue with Google"}
         </Button>
 
         <p className="mt-3 text-center text-sm">

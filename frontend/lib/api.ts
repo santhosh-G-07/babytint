@@ -10,7 +10,33 @@ import type {
   SiteTheme,
 } from "@/types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
+
+function isLocalApiBase() {
+  try {
+    const hostname = new URL(API_BASE).hostname;
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0";
+  } catch {
+    return false;
+  }
+}
+
+function normalizeUploadedUrl(url: string) {
+  if (!isLocalApiBase()) {
+    return url;
+  }
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.pathname.startsWith("/local-storage/")) {
+      return `${API_BASE}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+  } catch {
+    return url;
+  }
+
+  return url;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -151,7 +177,7 @@ export async function confirmPasswordReset(payload: { email: string; otp: string
 export async function uploadImage(file: File) {
   const form = new FormData();
   form.append("file", file);
-  return apiFetch<{ url: string; bucket: string; path: string }>(
+  const uploaded = await apiFetch<{ url: string; bucket: string; path: string }>(
     "/api/upload/image",
     {
       method: "POST",
@@ -159,12 +185,13 @@ export async function uploadImage(file: File) {
     },
     false,
   );
+  return { ...uploaded, url: normalizeUploadedUrl(uploaded.url) };
 }
 
 export async function uploadFrameAsset(file: File) {
   const form = new FormData();
   form.append("file", file);
-  return apiFetch<{ url: string; bucket: string; path: string }>(
+  const uploaded = await apiFetch<{ url: string; bucket: string; path: string }>(
     "/api/upload/frame",
     {
       method: "POST",
@@ -172,6 +199,7 @@ export async function uploadFrameAsset(file: File) {
     },
     true,
   );
+  return { ...uploaded, url: normalizeUploadedUrl(uploaded.url) };
 }
 
 export async function listServerCart() {
