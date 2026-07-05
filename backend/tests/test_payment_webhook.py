@@ -81,6 +81,68 @@ def test_payment_webhook_marks_printing_and_triggers_jobs(client, monkeypatch):
     assert emailed_order_ids == [str(order.id)]
 
 
+def test_payment_webhook_skips_print_generation_for_assisted_items(client, monkeypatch):
+    normal_item = SimpleNamespace(id=uuid.uuid4(), customization_data={"frame_id": str(uuid.uuid4())})
+    assisted_item = SimpleNamespace(
+        id=uuid.uuid4(),
+        customization_data={
+            "frame_id": str(uuid.uuid4()),
+            "customization_mode": "assisted",
+            "slots": [],
+        },
+    )
+    order = SimpleNamespace(
+        id=uuid.uuid4(),
+        razorpay_order_id="order_test_123",
+        razorpay_payment_id=None,
+        payment_status=PaymentStatus.pending,
+        status=OrderStatus.received,
+        items=[normal_item, assisted_item],
+    )
+    fake_db = FakeDB(order)
+    called_item_ids: list[str] = []
+    emailed_order_ids: list[str] = []
+
+    def fake_get_db():
+        yield fake_db
+
+    def fake_generate_order_item_print_file(item_id: str):
+        called_item_ids.append(str(item_id))
+
+    def fake_send_order_paid_email_task(order_id: str):
+        emailed_order_ids.append(order_id)
+
+    monkeypatch.setattr(payment, "generate_order_item_print_file", fake_generate_order_item_print_file)
+    monkeypatch.setattr(payment, "send_order_paid_email_task", fake_send_order_paid_email_task)
+    monkeypatch.setattr(payment.settings, "razorpay_webhook_secret", "")
+    monkeypatch.setattr(payment.settings, "app_env", "development")
+
+    from app.main import app
+
+    app.dependency_overrides[get_db] = fake_get_db
+
+    response = client.post(
+        "/api/payment/webhook",
+        json={
+            "event": "payment.captured",
+            "payload": {
+                "payment": {
+                    "entity": {
+                        "id": "pay_test_001",
+                        "order_id": "order_test_123",
+                    }
+                }
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert normal_item.print_file_status == PrintFileStatus.generating
+    assert assisted_item.print_file_status == PrintFileStatus.pending
+    assert called_item_ids == [str(normal_item.id)]
+    assert emailed_order_ids == [str(order.id)]
+
+
 def test_payment_webhook_ignores_duplicate_paid_event(client, monkeypatch):
     order_item = SimpleNamespace(id=uuid.uuid4())
     order = SimpleNamespace(

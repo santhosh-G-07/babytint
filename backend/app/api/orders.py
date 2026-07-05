@@ -19,6 +19,7 @@ from app.schemas.order import (
     OrderRead,
     OrderStatusUpdate,
 )
+from app.services.customization import is_assisted_customization, order_item_unit_price
 from app.services.image_composer import compose_print_png, generate_order_item_print_file
 
 router = APIRouter(prefix="/orders")
@@ -47,6 +48,11 @@ def _validate_customization(frame: Frame, customization_data: dict) -> None:
 
     if str(customization_data.get("frame_id")) != str(frame.id):
         raise HTTPException(status_code=400, detail="Customization does not match the selected frame.")
+
+    if is_assisted_customization(customization_data):
+        if frame.assisted_customization_price is None:
+            raise HTTPException(status_code=400, detail="Assisted customization is not available for this frame.")
+        return
 
     slots = customization_data.get("slots")
     if not isinstance(slots, list) or not slots:
@@ -110,14 +116,16 @@ def checkout(
         _ensure_frame_is_sellable(frame)
         _validate_customization(frame, item.customization_data)
         composite_preview_url = item.customization_data.get("composite_preview_url")
-        if not isinstance(composite_preview_url, str) or not composite_preview_url.strip():
+        if (
+            not is_assisted_customization(item.customization_data)
+            and (not isinstance(composite_preview_url, str) or not composite_preview_url.strip())
+        ):
             raise HTTPException(
                 status_code=400,
                 detail="Each order item requires a preview image. Please reopen the editor and save it again.",
             )
 
-        frame_price = frame.offer_price if frame.offer_price is not None else frame.price
-        item_price = Decimal(frame_price)
+        item_price = order_item_unit_price(frame, item.customization_data)
         total_amount += item_price * item.quantity
         prepared_items.append((frame, item.customization_data, item.quantity, item_price))
 
@@ -172,6 +180,8 @@ def regenerate_print_file(
     item = _admin_order_item(item_id, db)
     if item.order.payment_status != PaymentStatus.paid:
         raise HTTPException(status_code=400, detail="Payment must be completed before generating print files.")
+    if is_assisted_customization(item.customization_data):
+        raise HTTPException(status_code=400, detail="Assisted customization orders need manual design before print export.")
     item.print_file_status = PrintFileStatus.generating
     item.print_file_error = None
     db.commit()
@@ -200,6 +210,8 @@ def download_print_file(
     item = _admin_order_item(item_id, db)
     if item.order.payment_status != PaymentStatus.paid:
         raise HTTPException(status_code=400, detail="Payment must be completed before downloading print files.")
+    if is_assisted_customization(item.customization_data):
+        raise HTTPException(status_code=400, detail="Assisted customization orders need manual design before print export.")
     frame = item.frame
     image_bytes = compose_print_png(
         frame_asset_url=frame.frame_asset_url,

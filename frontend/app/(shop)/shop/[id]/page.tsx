@@ -6,6 +6,7 @@ import { ArrowRight, BadgeCheck, Frame, ShieldCheck, Truck } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { AssistedCustomizationButton } from "@/components/shop/AssistedCustomizationButton";
 import { framePreviewClassName, framePreviewUrl, inr } from "@/lib/utils";
 import type { FrameTemplate } from "@/types";
 
@@ -81,6 +82,8 @@ export default async function FrameDetailPage({
 
   const variants = await fetchVariants(frame);
   const finalPrice = Number(frame.offer_price ?? frame.price);
+  const assistedFee = Number(frame.assisted_customization_price ?? 0);
+  const assistedTotal = finalPrice + assistedFee;
   const canonicalUrl = `${SITE_URL.replace(/\/$/, "")}/shop/${frame.slug}`;
 
   const productJsonLd = {
@@ -172,6 +175,11 @@ export default async function FrameDetailPage({
               ) : null}
             </div>
             <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">Shipping is currently included in the displayed total.</p>
+            {frame.assisted_customization_price != null ? (
+              <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
+                Customize With Us total: {inr(assistedTotal)} including {inr(assistedFee)} design help.
+              </p>
+            ) : null}
           </div>
 
           <div className="grid gap-2 sm:grid-cols-3">
@@ -193,7 +201,7 @@ export default async function FrameDetailPage({
             {frame.is_active ? (
               <Button size="lg" className="w-full sm:w-auto" asChild>
                 <Link href={`/editor/${frame.slug}`}>
-                  Customize Now
+                  Customize Myself
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
@@ -202,6 +210,9 @@ export default async function FrameDetailPage({
                 Currently unavailable
               </Button>
             )}
+            {frame.assisted_customization_price != null ? (
+              <AssistedCustomizationButton frame={frame} />
+            ) : null}
             <Button size="lg" variant="outline" className="w-full sm:w-auto" asChild>
               <Link href="/shop">
                 <Frame className="mr-2 h-4 w-4" />

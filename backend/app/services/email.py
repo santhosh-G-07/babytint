@@ -11,6 +11,7 @@ from sqlalchemy.orm import joinedload
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.models.order import Order, OrderItem
+from app.services.customization import is_assisted_customization
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +92,8 @@ def _delivery_lines(address: dict | None) -> list[str]:
 def _order_item_label(item: OrderItem) -> str:
     frame = getattr(item, "frame", None)
     frame_name = getattr(frame, "name", None) or "Custom frame"
+    if is_assisted_customization(getattr(item, "customization_data", {})):
+        frame_name = f"{frame_name} + assisted customization"
     return f"{frame_name} x {item.quantity} - {_format_money(item.price * item.quantity)}"
 
 

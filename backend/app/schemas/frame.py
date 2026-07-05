@@ -53,6 +53,7 @@ class FrameBase(BaseModel):
     slot_count: int = Field(ge=1, le=24)
     price: Decimal = Field(gt=0)
     offer_price: Decimal | None = Field(default=None, gt=0)
+    assisted_customization_price: Decimal | None = Field(default=None, ge=0)
     is_active: bool = True
     frame_asset_url: str
     preview_image_url: str | None = None
@@ -72,6 +73,7 @@ class FrameUpdate(BaseModel):
     slot_count: int | None = Field(default=None, ge=1, le=24)
     price: Decimal | None = Field(default=None, gt=0)
     offer_price: Decimal | None = Field(default=None, gt=0)
+    assisted_customization_price: Decimal | None = Field(default=None, ge=0)
     is_active: bool | None = None
     frame_asset_url: str | None = None
     preview_image_url: str | None = None
@@ -90,6 +92,7 @@ class FrameRead(BaseModel):
     slot_count: int
     price: Decimal
     offer_price: Decimal | None
+    assisted_customization_price: Decimal | None
     is_active: bool
     frame_asset_url: str
     preview_image_url: str | None

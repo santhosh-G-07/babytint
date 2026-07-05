@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Sparkles } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { AuthGuard } from "@/components/layout/AuthGuard";
@@ -8,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getMyOrders } from "@/lib/api";
-import { inr } from "@/lib/utils";
+import { inr, isAssistedCustomization } from "@/lib/utils";
 
 const timeline = ["received", "printing", "dispatched", "delivered"] as const;
 
@@ -113,6 +114,25 @@ export default function OrdersPage() {
                       {order.status === "printing" ? "Printing in progress" : "Tracking link pending"}
                     </span>
                   )}
+                </div>
+
+                <div className="mt-3 space-y-2 border-t border-stone-100 pt-3 text-sm dark:border-stone-800">
+                  {order.items.map((item) => {
+                    const assisted = isAssistedCustomization(item.customization_data);
+                    return (
+                      <div key={item.id} className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-stone-700 dark:text-stone-200">
+                          {item.frame?.name ?? `Frame ${item.frame_id.slice(0, 8)}`} x {item.quantity}
+                        </span>
+                        {assisted ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
+                            <Sparkles className="h-3 w-3" />
+                            Customize With Us
+                          </span>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );

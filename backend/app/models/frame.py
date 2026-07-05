@@ -22,6 +22,7 @@ class Frame(Base):
     slot_count: Mapped[int] = mapped_column(nullable=False, default=1)
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     offer_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    assisted_customization_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     frame_asset_url: Mapped[str] = mapped_column(String(1024), nullable=False)
     preview_image_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)

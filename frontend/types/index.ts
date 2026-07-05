@@ -61,6 +61,7 @@ export interface FrameTemplate {
   slot_count: number;
   price: string;
   offer_price: string | null;
+  assisted_customization_price: string | null;
   is_active: boolean;
   frame_asset_url: string;
   preview_image_url: string | null;
@@ -111,6 +112,7 @@ export interface CustomizationText {
 export interface CustomizationData {
   frame_id: string;
   slots: CustomizationSlot[];
+  customization_mode?: "self" | "assisted";
   texts?: CustomizationText[];
   composite_preview_url?: string;
   composite_export_meta?: {

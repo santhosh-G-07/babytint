@@ -76,6 +76,7 @@ function toForm(frame?: FrameTemplate) {
     slot_count: String(frame?.slot_count ?? 1),
     price: String(frame?.price ?? "0"),
     offer_price: frame?.offer_price ?? "",
+    assisted_customization_price: frame?.assisted_customization_price ?? "300",
     frame_asset_url: frame?.frame_asset_url ?? "",
     preview_image_url: frame?.preview_image_url ?? "",
     is_active: frame?.is_active ?? true,
@@ -108,6 +109,9 @@ export default function AdminFramesPage() {
         slot_count: Number(form.slot_count),
         price: String(form.price),
         offer_price: form.offer_price ? String(form.offer_price) : null,
+        assisted_customization_price: form.assisted_customization_price
+          ? String(form.assisted_customization_price)
+          : null,
         is_active: form.is_active,
         frame_asset_url: form.frame_asset_url,
         preview_image_url: form.preview_image_url || null,
@@ -214,6 +218,9 @@ export default function AdminFramesPage() {
                 <p className="font-medium">{frame.name}</p>
                 <p className="text-xs text-stone-500 dark:text-stone-400">
                   {frame.size} | {frame.category} | {inr(frame.offer_price ?? frame.price)}
+                  {frame.assisted_customization_price != null
+                    ? ` | Assisted +${inr(frame.assisted_customization_price)}`
+                    : " | Assisted off"}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -263,7 +270,7 @@ export default function AdminFramesPage() {
               <Input value={form.size} onChange={(event) => setForm({ ...form, size: event.target.value })} />
             </div>
           </div>
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Slots</Label>
               <Input
@@ -287,6 +294,19 @@ export default function AdminFramesPage() {
                 value={form.offer_price}
                 onChange={(event) => setForm({ ...form, offer_price: event.target.value })}
               />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Customize With Us Fee</Label>
+              <Input
+                type="number"
+                min={0}
+                value={form.assisted_customization_price}
+                onChange={(event) => setForm({ ...form, assisted_customization_price: event.target.value })}
+                placeholder="300"
+              />
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                Added on top of frame price when customer asks BabyTint to customize. Leave blank to hide this option.
+              </p>
             </div>
           </div>
           <div className="space-y-1.5">

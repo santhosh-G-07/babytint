@@ -108,6 +108,7 @@ SQLITE_COMPAT_COLUMNS: dict[str, list[str]] = {
     "frames": [
         "ALTER TABLE frames ADD COLUMN text_positions JSON NOT NULL DEFAULT '[]'",
         "ALTER TABLE frames ADD COLUMN preview_image_url VARCHAR(1024)",
+        "ALTER TABLE frames ADD COLUMN assisted_customization_price NUMERIC(10, 2)",
     ],
     "cart_items": [
         "ALTER TABLE cart_items ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1",
@@ -129,6 +130,14 @@ def _ensure_sqlite_compat_columns() -> None:
                 column_name = statement.split(" ADD COLUMN ", 1)[1].split(" ", 1)[0]
                 if column_name not in existing:
                     connection.execute(text(statement))
+        if "frames" in table_names:
+            connection.execute(
+                text(
+                    "UPDATE frames "
+                    "SET assisted_customization_price = 300.00 "
+                    "WHERE assisted_customization_price IS NULL"
+                )
+            )
 
 
 def _public_local_asset_url(filename: str) -> str:
@@ -186,6 +195,7 @@ def _sync_dev_frames() -> None:
                 "slot_count": len(template["slot_positions"]),
                 "price": template["price"],
                 "offer_price": template["offer_price"],
+                "assisted_customization_price": template.get("assisted_customization_price", Decimal("300.00")),
                 "is_active": True,
                 "frame_asset_url": urls_by_slug[slug],
                 "slot_positions": template["slot_positions"],

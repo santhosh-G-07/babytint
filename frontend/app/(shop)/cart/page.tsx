@@ -3,12 +3,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { Eye, Minus, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Eye, Minus, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react";
 
 import { AuthGuard } from "@/components/layout/AuthGuard";
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/lib/store";
-import { inr } from "@/lib/utils";
+import { inr, isAssistedCustomization } from "@/lib/utils";
 
 export default function CartPage() {
   const { cart, removeFromCart, updateQuantity, subtotal } = useCartStore();
@@ -43,7 +43,9 @@ export default function CartPage() {
 
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-4">
-              {cart.map((item) => (
+              {cart.map((item) => {
+                const assisted = isAssistedCustomization(item.customization);
+                return (
                 <div
                   key={item.id}
                   className="rounded-2xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900"
@@ -65,10 +67,21 @@ export default function CartPage() {
                             Unavailable
                           </span>
                         ) : null}
+                        {assisted ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
+                            <Sparkles className="h-3 w-3" />
+                            Customize With Us
+                          </span>
+                        ) : null}
                       </div>
                       <p className="text-sm text-stone-500 dark:text-stone-400">
                         {item.frame.size} | {item.frame.slot_count} slots
                       </p>
+                      {assisted ? (
+                        <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-300">
+                          BabyTint will contact you/design this after order confirmation.
+                        </p>
+                      ) : null}
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <Button
                           size="icon"
@@ -85,21 +98,25 @@ export default function CartPage() {
                         >
                           <Plus className="h-4 w-4" />
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="ml-auto"
-                          onClick={() => setPreviewItemId(item.id)}
-                        >
-                          <Eye className="mr-1.5 h-4 w-4" />
-                          View
-                        </Button>
-                        <Button size="sm" variant="outline" asChild>
-                          <Link href={`/editor/${item.frame.slug}?cart_item=${encodeURIComponent(item.id)}`}>
-                            <Pencil className="mr-1.5 h-4 w-4" />
-                            Edit
-                          </Link>
-                        </Button>
+                        {!assisted ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="ml-auto"
+                              onClick={() => setPreviewItemId(item.id)}
+                            >
+                              <Eye className="mr-1.5 h-4 w-4" />
+                              View
+                            </Button>
+                            <Button size="sm" variant="outline" asChild>
+                              <Link href={`/editor/${item.frame.slug}?cart_item=${encodeURIComponent(item.id)}`}>
+                                <Pencil className="mr-1.5 h-4 w-4" />
+                                Edit
+                              </Link>
+                            </Button>
+                          </>
+                        ) : null}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -115,7 +132,8 @@ export default function CartPage() {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="surface h-fit p-5">

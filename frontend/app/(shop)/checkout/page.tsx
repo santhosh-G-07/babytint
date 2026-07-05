@@ -22,7 +22,7 @@ import {
 } from "@/lib/api";
 import { cartSyncKey, useCartStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
-import { inr } from "@/lib/utils";
+import { inr, isAssistedCustomization } from "@/lib/utils";
 import type { LocalCartItem, OrderRecord } from "@/types";
 
 declare global {
@@ -122,7 +122,7 @@ export default function CheckoutPage() {
     paymentOrder?.items.some((item) => item.frame && !item.frame.is_active),
   );
   const missingComposite = !paymentOrder
-    ? cart.find((item) => !item.customization.composite_preview_url)
+    ? cart.find((item) => !isAssistedCustomization(item.customization) && !item.customization.composite_preview_url)
     : null;
   const total = paymentOrder
     ? Number(paymentOrder.total_amount)
@@ -133,13 +133,15 @@ export default function CheckoutPage() {
       paymentOrder
         ? paymentOrder.items.map((item) => ({
             id: item.id,
-            name: item.frame?.name ?? `Frame ${item.frame_id.slice(0, 8)}`,
+            name: `${item.frame?.name ?? `Frame ${item.frame_id.slice(0, 8)}`}${
+              isAssistedCustomization(item.customization_data) ? " + Customize With Us" : ""
+            }`,
             quantity: item.quantity,
             total: Number(item.price) * item.quantity,
           }))
         : cart.map((item) => ({
             id: item.id,
-            name: item.frame.name,
+            name: `${item.frame.name}${isAssistedCustomization(item.customization) ? " + Customize With Us" : ""}`,
             quantity: item.quantity,
             total: item.price * item.quantity,
           })),

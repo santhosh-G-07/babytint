@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.order import Order, OrderItem, OrderStatus, PaymentStatus, PrintFileStatus
 from app.services.email import send_order_paid_email_task
+from app.services.customization import is_assisted_customization
 from app.services.image_composer import generate_order_item_print_file
 
 router = APIRouter(prefix="/payment")
@@ -72,11 +73,18 @@ def _mark_order_paid(
     order.payment_status = PaymentStatus.paid
     order.status = OrderStatus.printing
     for item in order.items:
-        item.print_file_status = PrintFileStatus.generating
+        customization_data = getattr(item, "customization_data", {})
+        item.print_file_status = (
+            PrintFileStatus.pending
+            if is_assisted_customization(customization_data)
+            else PrintFileStatus.generating
+        )
         item.print_file_error = None
     db.commit()
 
     for item in order.items:
+        if is_assisted_customization(getattr(item, "customization_data", {})):
+            continue
         background_tasks.add_task(generate_order_item_print_file, str(item.id))
     if not was_paid:
         background_tasks.add_task(send_order_paid_email_task, str(order.id))

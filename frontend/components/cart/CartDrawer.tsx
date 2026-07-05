@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ShoppingBag, Trash2 } from "lucide-react";
+import { ShoppingBag, Sparkles, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { useCartStore } from "@/lib/store";
-import { inr } from "@/lib/utils";
+import { inr, isAssistedCustomization } from "@/lib/utils";
 
 export function CartDrawer() {
   const { cart, removeFromCart, subtotal } = useCartStore();
@@ -44,7 +44,9 @@ export function CartDrawer() {
             {cart.length === 0 ? (
               <p className="text-sm text-stone-500 dark:text-stone-400">Your cart is empty.</p>
             ) : null}
-            {cart.map((item) => (
+            {cart.map((item) => {
+              const assisted = isAssistedCustomization(item.customization);
+              return (
               <div key={item.id} className="rounded-xl border border-stone-200 p-4 dark:border-stone-800">
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -52,6 +54,12 @@ export function CartDrawer() {
                     <p className="text-sm text-stone-500 dark:text-stone-400">
                       Qty {item.quantity} | {inr(item.price)}
                     </p>
+                    {assisted ? (
+                      <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                        <Sparkles className="h-3 w-3" />
+                        Customize With Us
+                      </p>
+                    ) : null}
                     {!item.frame.is_active ? (
                       <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
                         No longer available for checkout
@@ -61,9 +69,11 @@ export function CartDrawer() {
                       <Button variant="outline" size="sm" asChild>
                         <Link href="/cart">View</Link>
                       </Button>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/editor/${item.frame.slug}?cart_item=${encodeURIComponent(item.id)}`}>Edit</Link>
-                      </Button>
+                      {!assisted ? (
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/editor/${item.frame.slug}?cart_item=${encodeURIComponent(item.id)}`}>Edit</Link>
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                   <Button
@@ -76,7 +86,8 @@ export function CartDrawer() {
                   </Button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
           <Separator className="my-4" />
           <div className="space-y-3">

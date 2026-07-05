@@ -252,6 +252,7 @@ export function FrameCreationWizard({ onClose, onCreated }: FrameCreationWizardP
     heightPx: 1800,
     price: "1299",
     offerPrice: "",
+    assistedCustomizationPrice: "300",
     isActive: true,
   });
   const [backgroundMode, setBackgroundMode] = useState<BackgroundMode>("solid");
@@ -495,6 +496,9 @@ export function FrameCreationWizard({ onClose, onCreated }: FrameCreationWizardP
         slot_count: slotPositions.length,
         price: String(Number(details.price) || 0),
         offer_price: details.offerPrice ? String(Number(details.offerPrice) || 0) : null,
+        assisted_customization_price: details.assistedCustomizationPrice
+          ? String(Number(details.assistedCustomizationPrice) || 0)
+          : null,
         is_active: details.isActive,
         frame_asset_url: uploaded.url,
         preview_image_url: null,
@@ -617,7 +621,7 @@ export function FrameCreationWizard({ onClose, onCreated }: FrameCreationWizardP
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1.5">
                   <Label>Price</Label>
                   <Input
@@ -634,6 +638,17 @@ export function FrameCreationWizard({ onClose, onCreated }: FrameCreationWizardP
                     min={0}
                     value={details.offerPrice}
                     onChange={(event) => setDetails((previous) => ({ ...previous, offerPrice: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Customize With Us Fee</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={details.assistedCustomizationPrice}
+                    onChange={(event) =>
+                      setDetails((previous) => ({ ...previous, assistedCustomizationPrice: event.target.value }))
+                    }
                   />
                 </div>
               </div>
@@ -831,6 +846,15 @@ export function FrameCreationWizard({ onClose, onCreated }: FrameCreationWizardP
                         placeholder="Offer"
                       />
                     </div>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={details.assistedCustomizationPrice}
+                      onChange={(event) =>
+                        setDetails((previous) => ({ ...previous, assistedCustomizationPrice: event.target.value }))
+                      }
+                      placeholder="Customize with us fee"
+                    />
                   </div>
                 </div>
 

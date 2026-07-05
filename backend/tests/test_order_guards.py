@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from app.core.auth import AuthUser, get_current_user, require_admin
 from app.core.database import get_db
+from app.api.orders import _validate_customization
 from app.models.order import OrderStatus, PaymentStatus
 
 
@@ -215,3 +216,47 @@ def test_create_payment_order_rejects_inactive_frame_order(client):
     assert response.status_code == 400
     assert response.json()["detail"] == "This order contains a frame that is no longer available."
     assert fake_db.commits == 0
+
+
+def test_assisted_customization_accepts_empty_slots_when_enabled():
+    frame_id = uuid.uuid4()
+    frame = SimpleNamespace(
+        id=frame_id,
+        assisted_customization_price=Decimal("300.00"),
+        slot_positions=[{"slot_id": 1}],
+    )
+
+    _validate_customization(
+        frame,
+        {
+            "frame_id": str(frame_id),
+            "customization_mode": "assisted",
+            "slots": [],
+        },
+    )
+
+
+def test_assisted_customization_rejects_when_fee_not_configured():
+    frame_id = uuid.uuid4()
+    frame = SimpleNamespace(
+        id=frame_id,
+        assisted_customization_price=None,
+        slot_positions=[{"slot_id": 1}],
+    )
+
+    from fastapi import HTTPException
+
+    try:
+        _validate_customization(
+            frame,
+            {
+                "frame_id": str(frame_id),
+                "customization_mode": "assisted",
+                "slots": [],
+            },
+        )
+    except HTTPException as exc:
+        assert exc.status_code == 400
+        assert exc.detail == "Assisted customization is not available for this frame."
+    else:
+        raise AssertionError("Expected assisted customization to be rejected.")

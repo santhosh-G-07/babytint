@@ -13,6 +13,7 @@ import {
 import { hasAuthToken } from "@/lib/local-admin-auth";
 import { cartSyncKey, useCartStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
+import { cartItemPrice } from "@/lib/utils";
 import type { CustomizationData } from "@/types";
 
 type ServerCartItem = Awaited<ReturnType<typeof listServerCart>>[number];
@@ -92,9 +93,14 @@ function normalizeCustomization(frameId: string, raw: unknown): CustomizationDat
       typeof value.composite_export_meta === "object"
         ? (value.composite_export_meta as CustomizationData["composite_export_meta"])
         : undefined;
+    const customizationMode =
+      value.customization_mode === "assisted" || value.customization_mode === "self"
+        ? value.customization_mode
+        : undefined;
     return {
       frame_id: normalizedFrameId,
       slots: slots as CustomizationData["slots"],
+      customization_mode: customizationMode,
       texts: texts as CustomizationData["texts"],
       composite_preview_url: compositePreviewUrl,
       composite_export_meta: compositeMeta,
@@ -167,7 +173,7 @@ export function CartSync() {
               useCartStore.getState().addToCart({
                 frame,
                 quantity: Math.max(1, serverItem.quantity ?? 1),
-                price: Number(frame.offer_price ?? frame.price),
+                price: cartItemPrice(frame, customization),
                 customization,
                 serverCartItemId: serverItem.id,
               });

@@ -1,7 +1,7 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
-import type { FrameTemplate } from "@/types";
+import type { CustomizationData, FrameTemplate } from "@/types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -22,4 +22,23 @@ export function inr(value: number | string) {
     currency: "INR",
     maximumFractionDigits: 0,
   }).format(amount || 0);
+}
+
+export function isAssistedCustomization(customization?: Pick<CustomizationData, "customization_mode"> | null) {
+  return customization?.customization_mode === "assisted";
+}
+
+export function frameBasePrice(frame: FrameTemplate) {
+  return Number(frame.offer_price ?? frame.price);
+}
+
+export function assistedCustomizationFee(frame: FrameTemplate) {
+  return Number(frame.assisted_customization_price ?? 0);
+}
+
+export function cartItemPrice(frame: FrameTemplate, customization?: Pick<CustomizationData, "customization_mode"> | null) {
+  const basePrice = frameBasePrice(frame);
+  return isAssistedCustomization(customization)
+    ? basePrice + assistedCustomizationFee(frame)
+    : basePrice;
 }

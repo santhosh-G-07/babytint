@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download, RefreshCw } from "lucide-react";
+import { Download, RefreshCw, Sparkles } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { downloadPrintFile, getAdminOrders, regeneratePrintFile, updateOrderStatus } from "@/lib/api";
-import { inr } from "@/lib/utils";
+import { inr, isAssistedCustomization } from "@/lib/utils";
 import type { OrderItem, OrderRecord } from "@/types";
 
 const statuses = ["received", "printing", "dispatched", "delivered"];
@@ -225,6 +225,9 @@ export default function AdminOrdersPage() {
 
             <div className="mt-4 space-y-3">
               {order.items.map((item) => (
+                (() => {
+                  const assisted = isAssistedCustomization(item.customization_data);
+                  return (
                 <div
                   key={item.id}
                   className="grid gap-3 rounded-xl border border-stone-200 p-3 dark:border-stone-800 md:grid-cols-[96px_1fr_auto]"
@@ -237,7 +240,15 @@ export default function AdminOrdersPage() {
                   </div>
 
                   <div className="text-sm">
-                    <p className="font-medium">{item.frame?.name ?? `Frame ${item.frame_id.slice(0, 8)}`}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium">{item.frame?.name ?? `Frame ${item.frame_id.slice(0, 8)}`}</p>
+                      {assisted ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
+                          <Sparkles className="h-3 w-3" />
+                          Customize With Us
+                        </span>
+                      ) : null}
+                    </div>
                     <p className="text-stone-500 dark:text-stone-400">
                       Qty {item.quantity} | {inr(item.price)} | {item.frame?.size ?? "Size missing"}
                     </p>
@@ -245,6 +256,11 @@ export default function AdminOrdersPage() {
                       Print: {item.print_file_status}
                       {item.print_file_error ? ` (${item.print_file_error})` : ""}
                     </p>
+                    {assisted ? (
+                      <p className="mt-1 text-emerald-700 dark:text-emerald-300">
+                        Customer asked BabyTint to prepare the design manually before print export.
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 md:justify-end">
@@ -252,7 +268,7 @@ export default function AdminOrdersPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => printMutation.mutate(item.id)}
-                      disabled={printMutation.isPending || !isPaid}
+                      disabled={printMutation.isPending || !isPaid || assisted}
                     >
                       <RefreshCw className="mr-2 h-4 w-4" />
                       Generate
@@ -260,13 +276,15 @@ export default function AdminOrdersPage() {
                     <Button
                       size="sm"
                       onClick={() => void handleDownload(item)}
-                      disabled={downloadingItemId === item.id || !isPaid}
+                      disabled={downloadingItemId === item.id || !isPaid || assisted}
                     >
                       <Download className="mr-2 h-4 w-4" />
                       {downloadingItemId === item.id ? "Preparing..." : "Full-HD PNG"}
                     </Button>
                   </div>
                 </div>
+                  );
+                })()
               ))}
             </div>
             </div>
