@@ -9,7 +9,26 @@ from supabase import Client, create_client
 from app.core.config import get_settings
 
 settings = get_settings()
-LOCAL_STORAGE_ROOT = Path("local_storage")
+
+
+def resolve_local_storage_root(settings_obj: object) -> Path:
+    configured = str(getattr(settings_obj, "local_storage_root", "")).strip()
+    if configured:
+        return Path(configured)
+
+    database_url = str(getattr(settings_obj, "database_url", ""))
+    sqlite_prefix = "sqlite:///"
+    if database_url.startswith(sqlite_prefix):
+        raw_db_path = database_url[len(sqlite_prefix) :]
+        db_path = Path(raw_db_path)
+        if raw_db_path.startswith("/") or db_path.is_absolute():
+            return db_path.parent / "local_storage"
+
+    return Path("local_storage")
+
+
+def get_local_storage_root() -> Path:
+    return resolve_local_storage_root(settings)
 
 
 def _supabase() -> Client:
@@ -58,7 +77,7 @@ def _local_upload(
 ) -> StorageUploadResult:
     ext = Path(filename).suffix or ".bin"
     key = f"{uuid.uuid4()}{ext}"
-    bucket_dir = LOCAL_STORAGE_ROOT / bucket
+    bucket_dir = get_local_storage_root() / bucket
     bucket_dir.mkdir(parents=True, exist_ok=True)
     destination = bucket_dir / key
     destination.write_bytes(file_bytes)

@@ -1,5 +1,4 @@
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api import api_router
 from app.core.bootstrap import bootstrap_dev_database
 from app.core.config import get_settings
+from app.services.storage import get_local_storage_root
 
 settings = get_settings()
 
@@ -32,7 +32,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-local_storage_dir = Path("local_storage")
+local_storage_dir = get_local_storage_root()
 local_storage_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/local-storage", StaticFiles(directory=local_storage_dir), name="local_storage")
 

@@ -1,5 +1,6 @@
 import uuid
 from decimal import Decimal
+from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, delete, func, or_, select
@@ -51,16 +52,26 @@ def list_frames(
 
 @router.get("/{frame_ref}", response_model=FrameRead)
 def get_frame(frame_ref: str, db: Session = Depends(get_db)) -> Frame:
-    stmt = select(Frame).where(Frame.slug == frame_ref)
+    decoded_ref = unquote(frame_ref)
+    lookup_refs = [frame_ref]
+    if decoded_ref != frame_ref:
+        lookup_refs.append(decoded_ref)
+
+    stmt = select(Frame).where(Frame.slug.in_(lookup_refs))
     frame = db.scalar(stmt)
 
     if frame is None:
-        try:
-            frame_uuid = uuid.UUID(frame_ref)
-        except ValueError:
-            frame_uuid = None
-        if frame_uuid:
+        for lookup_ref in lookup_refs:
+            try:
+                frame_uuid = uuid.UUID(lookup_ref)
+            except ValueError:
+                continue
             frame = db.scalar(select(Frame).where(Frame.id == frame_uuid))
+            if frame is not None:
+                break
+
+    if frame is None:
+        frame = db.scalar(select(Frame).where(func.lower(Frame.name) == decoded_ref.strip().lower()))
 
     if frame is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Frame not found.")

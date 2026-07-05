@@ -10,6 +10,7 @@ from app.core.config import get_settings
 from app.core.database import Base, SessionLocal, engine
 from app.models import Frame
 from app.models.order import CartItem, OrderItem
+from app.services.storage import get_local_storage_root
 
 FRAME_TEMPLATES: list[dict] = [
     {
@@ -155,9 +156,8 @@ def _public_repo_asset_url(filename: str) -> str:
 
 def _sync_frame_assets() -> dict[str, str]:
     project_root = Path(__file__).resolve().parents[3]
-    backend_root = Path(__file__).resolve().parents[2]
     source_root = project_root / "img"
-    target_root = backend_root / "local_storage" / get_settings().storage_bucket_frames
+    target_root = get_local_storage_root() / get_settings().storage_bucket_frames
     target_root.mkdir(parents=True, exist_ok=True)
 
     urls_by_slug: dict[str, str] = {}

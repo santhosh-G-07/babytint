@@ -48,7 +48,8 @@ This backend includes `railway.toml` for Railway deployment.
    - Optional Supabase keys if you use Supabase auth/storage.
    - Optional for testing without Supabase storage:
      - `ALLOW_LOCAL_STORAGE_FALLBACK=true`
+     - `LOCAL_STORAGE_ROOT=/data/local_storage`
      - `PUBLIC_BASE_URL=https://<your-backend-domain>`
 5. Keep backend replicas at `1` when using SQLite.
 
-Without a volume, SQLite data will be lost on redeploy/restart.
+Without a volume, SQLite data and local fallback uploads will be lost on redeploy/restart.

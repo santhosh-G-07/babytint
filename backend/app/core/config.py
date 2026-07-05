@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     storage_bucket_uploads: str = Field(default="user-uploads", alias="STORAGE_BUCKET_UPLOADS")
     storage_bucket_prints: str = Field(default="print-ready", alias="STORAGE_BUCKET_PRINTS")
     allow_local_storage_fallback: bool = Field(default=True, alias="ALLOW_LOCAL_STORAGE_FALLBACK")
+    local_storage_root: str = Field(default="", alias="LOCAL_STORAGE_ROOT")
     public_base_url: str = Field(default="", alias="PUBLIC_BASE_URL")
     max_upload_bytes: int = Field(default=20 * 1024 * 1024, alias="MAX_UPLOAD_BYTES")
     max_upload_pixels: int = Field(default=80_000_000, alias="MAX_UPLOAD_PIXELS")
