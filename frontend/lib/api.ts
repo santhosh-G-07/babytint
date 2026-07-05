@@ -50,13 +50,17 @@ export class ApiError extends Error {
 }
 
 async function authHeader(): Promise<Record<string, string>> {
+  const adminToken = getAdminToken();
+  if (adminToken) {
+    return { Authorization: `Bearer ${adminToken}` };
+  }
+
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (token) {
     return { Authorization: `Bearer ${token}` };
   }
-  const adminToken = getAdminToken();
-  return adminToken ? { Authorization: `Bearer ${adminToken}` } : {};
+  return {};
 }
 
 async function apiFetch<T>(
@@ -362,6 +366,16 @@ export async function downloadPrintFile(itemId: string) {
 
 export async function getAdminDashboard() {
   return apiFetch<AdminDashboardSummary>("/api/admin/dashboard", undefined, true);
+}
+
+export async function resetFrameCatalog() {
+  return apiFetch<{
+    ok: boolean;
+    total_frames: number;
+    deleted_frames: number;
+    deactivated_frames: number;
+    cleared_cart_items: number;
+  }>("/api/admin/frames/reset-catalog", { method: "POST" }, true);
 }
 
 export async function getSiteSettings() {

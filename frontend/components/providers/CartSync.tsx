@@ -255,9 +255,10 @@ export function CartSync() {
         lastSyncedSignatureRef.current = syncSignature();
       } catch (error) {
         if (error instanceof ApiError) {
-          const isAuthProviderMissing = /Authentication provider is not configured/i.test(error.message);
-          if (isAuthProviderMissing) {
-            // Backend auth provider is disabled/missing: keep local cart working without hard-failing UI.
+          const isAuthProviderUnavailable =
+            /Authentication provider is not configured|Authentication service is unavailable/i.test(error.message);
+          if (isAuthProviderUnavailable) {
+            // Backend auth provider is unavailable: keep local cart working without hard-failing UI.
             hydratedForSessionRef.current = authKey;
             lastSyncedSignatureRef.current = localSignature;
             return;

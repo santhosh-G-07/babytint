@@ -11,7 +11,14 @@ import { StorefrontPreviewEditor } from "@/components/admin/StorefrontPreviewEdi
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { createFrame, deleteFrame, getFrames, updateFrame, uploadFrameAsset } from "@/lib/api";
+import {
+  createFrame,
+  deleteFrame,
+  getFrames,
+  resetFrameCatalog,
+  updateFrame,
+  uploadFrameAsset,
+} from "@/lib/api";
 import type { FrameTemplate } from "@/types";
 import { inr } from "@/lib/utils";
 
@@ -91,10 +98,11 @@ export default function AdminFramesPage() {
   const [form, setForm] = useState(toForm());
   const [uploading, setUploading] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["admin", "frames"],
-    queryFn: () => getFrames({ active_only: false }),
+    queryKey: ["admin", "frames", showInactive],
+    queryFn: () => getFrames({ active_only: !showInactive }),
   });
 
   const saveMutation = useMutation({
@@ -148,6 +156,23 @@ export default function AdminFramesPage() {
     },
   });
 
+  const resetCatalogMutation = useMutation({
+    mutationFn: resetFrameCatalog,
+    onSuccess: (result) => {
+      toast.success(
+        `Catalog reset. Deleted ${result.deleted_frames}, archived ${result.deactivated_frames}, cleared ${result.cleared_cart_items} cart items.`,
+      );
+      setEditing(null);
+      setForm(toForm());
+      void queryClient.invalidateQueries({ queryKey: ["admin", "frames"] });
+      void queryClient.invalidateQueries({ queryKey: ["frames"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Catalog reset failed.");
+    },
+  });
+
   const sorted = useMemo(() => (data ?? []).sort((a, b) => a.name.localeCompare(b.name)), [data]);
   const { parsedSlots, jsonError } = useMemo(() => {
     try {
@@ -197,17 +222,46 @@ export default function AdminFramesPage() {
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <CardTitle>Frame Templates</CardTitle>
-            <Button
-              size="sm"
-              onClick={() => setWizardOpen(true)}
-            >
-              Create With Wizard
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowInactive((value) => !value)}
+              >
+                {showInactive ? "Hide Inactive" : "Show Inactive"}
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={resetCatalogMutation.isPending || sorted.length === 0}
+                onClick={() => {
+                  const confirmed = window.confirm(
+                    "Reset the frame catalog? This deletes unused frames, archives ordered frames, and clears all carts.",
+                  );
+                  if (confirmed) {
+                    resetCatalogMutation.mutate();
+                  }
+                }}
+              >
+                {resetCatalogMutation.isPending ? "Resetting..." : "Reset Catalog"}
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setWizardOpen(true)}
+              >
+                Create With Wizard
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
           {isLoading ? (
             <p className="text-sm text-stone-500 dark:text-stone-400">Loading frames...</p>
+          ) : null}
+          {!isLoading && sorted.length === 0 ? (
+            <p className="text-sm text-stone-500 dark:text-stone-400">
+              No {showInactive ? "" : "active "}frames yet. Create the first one with the wizard.
+            </p>
           ) : null}
           {sorted.map((frame) => (
             <div

@@ -43,7 +43,7 @@ export default function RegisterPage() {
       return;
     }
     if (!isSupabaseConfigured) {
-      toast.error("Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+      toast.error("Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and a publishable key.");
       return;
     }
 

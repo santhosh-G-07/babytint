@@ -241,10 +241,3 @@ def bootstrap_dev_database() -> None:
     _ensure_sqlite_compat_columns()
     if settings.app_env.lower() == "development":
         _sync_dev_frames()
-        return
-
-    # In production SQLite deployments, seed templates once on a fresh database.
-    with SessionLocal() as db:
-        frame_count = db.scalar(select(func.count()).select_from(Frame)) or 0
-    if int(frame_count) == 0:
-        _sync_dev_frames()

@@ -1,7 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 
 const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-const rawSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+const rawSupabaseAnonKey = (
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+  ""
+).trim();
 const placeholderUrl = "https://placeholder.supabase.co";
 const placeholderKey = "placeholder-anon-key";
 
@@ -33,7 +37,9 @@ export const isSupabaseConfigured = Boolean(
 
 export async function assertSupabaseReachable() {
   if (!isSupabaseConfigured) {
-    throw new Error("Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+    throw new Error(
+      "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.",
+    );
   }
 
   const controller = new AbortController();
@@ -65,7 +71,7 @@ export async function assertSupabaseReachable() {
 
 if (typeof window !== "undefined" && (!hasValidSupabaseUrl || !hasSupabaseAnonKey)) {
   console.warn(
-    "Supabase env vars are missing or invalid. Auth and uploads will fail until NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set correctly.",
+    "Supabase env vars are missing or invalid. Auth and uploads will fail until NEXT_PUBLIC_SUPABASE_URL and a publishable key are set correctly.",
   );
 }
 
