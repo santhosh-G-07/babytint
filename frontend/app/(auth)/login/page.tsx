@@ -10,15 +10,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { adminLogin, loginLocal } from "@/lib/api";
-import { clearAdminToken, setAuthToken } from "@/lib/local-admin-auth";
-import { assertSupabaseReachable, isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { setAuthToken } from "@/lib/local-admin-auth";
 
 export const dynamic = "force-dynamic";
 
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
 
   const nextPath = () => {
     if (typeof window === "undefined") {
@@ -36,18 +34,6 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      let supabaseErrorMessage: string | null = null;
-      if (isSupabaseConfigured) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (!error) {
-          clearAdminToken();
-          toast.success("Logged in successfully.");
-          router.push(nextPath());
-          return;
-        }
-        supabaseErrorMessage = error.message;
-      }
-
       try {
         const local = await loginLocal({ email, password });
         setAuthToken(local.access_token);
@@ -61,10 +47,6 @@ export default function LoginPage() {
           router.push("/admin");
           return;
         } catch (adminErr) {
-          if (supabaseErrorMessage) {
-            toast.error(supabaseErrorMessage);
-            return;
-          }
           const adminMessage =
             adminErr instanceof Error && adminErr.message
               ? adminErr.message
@@ -80,33 +62,6 @@ export default function LoginPage() {
       toast.error(message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const signInWithGoogle = async () => {
-    if (googleLoading) {
-      return;
-    }
-    if (!isSupabaseConfigured) {
-      toast.error("Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and a publishable key.");
-      return;
-    }
-
-    const redirectTo = `${window.location.origin}${nextPath()}`;
-    setGoogleLoading(true);
-    try {
-      await assertSupabaseReachable();
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo },
-      });
-      if (error) {
-        toast.error(error.message);
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not reach Supabase.");
-    } finally {
-      setGoogleLoading(false);
     }
   };
 
@@ -129,10 +84,6 @@ export default function LoginPage() {
             {loading ? "Logging in..." : "Login"}
           </Button>
         </form>
-
-        <Button variant="outline" className="mt-3 w-full" onClick={signInWithGoogle} disabled={googleLoading}>
-          {googleLoading ? "Checking Google login..." : "Continue with Google"}
-        </Button>
 
         <p className="mt-3 text-center text-sm">
           <Link href="/forgot-password" className="font-medium text-amber-700">

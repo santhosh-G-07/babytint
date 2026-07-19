@@ -9,7 +9,6 @@ function configuredImageHosts() {
   const urls = [
     process.env.NEXT_PUBLIC_API_URL,
     process.env.NEXT_PUBLIC_SITE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
     "https://raw.githubusercontent.com",
     ...(process.env.NEXT_PUBLIC_IMAGE_HOSTS ?? "")
       .split(",")

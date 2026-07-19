@@ -1,6 +1,6 @@
 # BabyTint Frontend
 
-Next.js 14 App Router frontend for BabyTint Photography.
+Next.js App Router frontend for BabyTint Photography.
 
 ## Scripts
 
@@ -14,14 +14,9 @@ npm run build
 ## Required Env (`.env.local`)
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-# Or use Supabase's newer publishable key name:
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 NEXT_PUBLIC_API_URL=http://localhost:8000
 NEXT_PUBLIC_RAZORPAY_KEY_ID=
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
-CRON_SECRET=
 ```
 
 ## Key Routes
@@ -45,10 +40,7 @@ Recommended: Vercel
    - `NEXT_PUBLIC_API_URL=https://<your-railway-backend-domain>`
    - `NEXT_PUBLIC_SITE_URL=https://<your-frontend-domain>`
    - `NEXT_PUBLIC_RAZORPAY_KEY_ID=<key>`
-   - Supabase env vars only if you use Supabase auth.
 4. Deploy.
-5. For Supabase free-tier wake-up, this project includes a Vercel Cron job (`/api/cron/supabase-warm`) every 12 hours.
-   Set `CRON_SECRET` in Vercel so only Vercel Cron can call the route.
 
 SEO files included:
 - `app/robots.ts`

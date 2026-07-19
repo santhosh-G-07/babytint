@@ -5,7 +5,6 @@ import Link from "next/link";
 
 import { authMe } from "@/lib/api";
 import { hasAdminToken } from "@/lib/local-admin-auth";
-import { supabase } from "@/lib/supabase";
 
 export function AdminGuard({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
@@ -15,9 +14,8 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
     let active = true;
     const run = async () => {
       try {
-        const { data } = await supabase.auth.getSession();
         const canTryAdminToken = hasAdminToken();
-        if (!data.session && !canTryAdminToken) {
+        if (!canTryAdminToken) {
           if (active) {
             setAllowed(false);
           }
@@ -38,8 +36,13 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
       }
     };
     void run();
+    const handleAuthChange = () => {
+      void run();
+    };
+    window.addEventListener("babytint-auth-change", handleAuthChange);
     return () => {
       active = false;
+      window.removeEventListener("babytint-auth-change", handleAuthChange);
     };
   }, []);
 

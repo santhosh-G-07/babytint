@@ -17,7 +17,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    supabase_uid: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
+    auth_uid: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
     name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(256), nullable=True)

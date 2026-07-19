@@ -196,7 +196,7 @@ export interface OrderRecord {
 
 export interface AuthProfile {
   id: string;
-  supabase_uid: string;
+  auth_uid: string;
   email: string;
   name: string | null;
   role: UserRole;

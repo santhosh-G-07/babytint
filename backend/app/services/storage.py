@@ -1,10 +1,7 @@
-import mimetypes
 import os
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-
-from supabase import Client, create_client
 
 from app.core.config import get_settings
 
@@ -29,18 +26,6 @@ def resolve_local_storage_root(settings_obj: object) -> Path:
 
 def get_local_storage_root() -> Path:
     return resolve_local_storage_root(settings)
-
-
-def _supabase() -> Client:
-    return create_client(settings.supabase_url, settings.supabase_service_key)
-
-
-def _is_supabase_configured() -> bool:
-    return bool(
-        settings.supabase_url
-        and settings.supabase_service_key
-        and settings.supabase_url.startswith("http"),
-    )
 
 
 def _public_base_url() -> str:
@@ -95,37 +80,7 @@ def upload_bytes(
     content_type: str | None = None,
     upsert: bool = False,
 ) -> StorageUploadResult:
-    if not _is_supabase_configured():
-        if settings.app_env.lower() == "development" or settings.allow_local_storage_fallback:
-            return _local_upload(bucket=bucket, file_bytes=file_bytes, filename=filename)
-        raise RuntimeError("Supabase storage is not configured.")
-
-    try:
-        client = _supabase()
-        ext = Path(filename).suffix or ".bin"
-        key = f"{uuid.uuid4()}{ext}"
-
-        if content_type is None:
-            content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
-
-        client.storage.from_(bucket).upload(
-            key,
-            file_bytes,
-            file_options={
-                "content-type": content_type,
-                "upsert": upsert,
-            },
-        )
-        public_url_obj = client.storage.from_(bucket).get_public_url(key)
-        if isinstance(public_url_obj, dict):
-            public_url = str(public_url_obj.get("publicUrl", ""))
-        else:
-            public_url = str(public_url_obj)
-        return StorageUploadResult(bucket=bucket, path=key, public_url=public_url)
-    except Exception:
-        if settings.app_env.lower() == "development" or settings.allow_local_storage_fallback:
-            return _local_upload(bucket=bucket, file_bytes=file_bytes, filename=filename)
-        raise
+    return _local_upload(bucket=bucket, file_bytes=file_bytes, filename=filename)
 
 
 def upload_file(

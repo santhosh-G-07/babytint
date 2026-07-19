@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { addServerCartItem, authMe, getFrame, uploadImage } from "@/lib/api";
 import { useCartStore, useEditorStore } from "@/lib/store";
-import { supabase } from "@/lib/supabase";
 import type { SlotAdjustments, SlotPosition } from "@/types";
 
 const SUPPORTED_UPLOAD_MIME_TYPES = new Set([
@@ -275,15 +274,12 @@ export default function EditorPage() {
       return;
     }
 
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) {
-      try {
-        await authMe();
-      } catch {
-        const nextPath = `/editor/${frameRef}${cartItemIdFromQuery ? `?cart_item=${encodeURIComponent(cartItemIdFromQuery)}` : ""}`;
-        router.push(`/login?next=${encodeURIComponent(nextPath)}`);
-        return;
-      }
+    try {
+      await authMe();
+    } catch {
+      const nextPath = `/editor/${frameRef}${cartItemIdFromQuery ? `?cart_item=${encodeURIComponent(cartItemIdFromQuery)}` : ""}`;
+      router.push(`/login?next=${encodeURIComponent(nextPath)}`);
+      return;
     }
 
     setSavingComposite(true);

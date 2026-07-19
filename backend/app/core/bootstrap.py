@@ -127,6 +127,10 @@ def _ensure_sqlite_compat_columns() -> None:
             if table_name not in table_names:
                 continue
             existing = {column["name"] for column in inspector.get_columns(table_name)}
+            if table_name == "users" and "supabase_uid" in existing and "auth_uid" not in existing:
+                connection.execute(text("ALTER TABLE users RENAME COLUMN supabase_uid TO auth_uid"))
+                existing.remove("supabase_uid")
+                existing.add("auth_uid")
             for statement in statements:
                 column_name = statement.split(" ADD COLUMN ", 1)[1].split(" ", 1)[0]
                 if column_name not in existing:

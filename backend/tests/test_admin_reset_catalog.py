@@ -27,7 +27,7 @@ def test_reset_catalog_archives_ordered_frames_and_deletes_unused(client, tmp_pa
 
     with TestingSession() as db:
         user = User(
-            supabase_uid="local:test-user",
+            auth_uid="local:test-user",
             email="customer@example.com",
             name="Customer",
         )

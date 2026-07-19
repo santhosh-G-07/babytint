@@ -1,4 +1,3 @@
-import { supabase } from "@/lib/supabase";
 import { getAdminToken } from "@/lib/local-admin-auth";
 import type {
   AdminDashboardSummary,
@@ -38,6 +37,14 @@ function normalizeUploadedUrl(url: string) {
   return url;
 }
 
+function normalizeFrameAssetUrls(frame: FrameTemplate): FrameTemplate {
+  return {
+    ...frame,
+    frame_asset_url: normalizeUploadedUrl(frame.frame_asset_url),
+    preview_image_url: frame.preview_image_url ? normalizeUploadedUrl(frame.preview_image_url) : frame.preview_image_url,
+  };
+}
+
 export class ApiError extends Error {
   status: number;
   payload: unknown;
@@ -50,15 +57,9 @@ export class ApiError extends Error {
 }
 
 async function authHeader(): Promise<Record<string, string>> {
-  const adminToken = getAdminToken();
-  if (adminToken) {
-    return { Authorization: `Bearer ${adminToken}` };
-  }
-
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  if (token) {
-    return { Authorization: `Bearer ${token}` };
+  const localToken = getAdminToken();
+  if (localToken) {
+    return { Authorization: `Bearer ${localToken}` };
   }
   return {};
 }
@@ -117,11 +118,13 @@ export async function getFrames(params?: {
   if (params?.search) query.set("search", params.search);
   if (params?.active_only !== undefined) query.set("active_only", String(params.active_only));
   const qs = query.toString();
-  return apiFetch<FrameTemplate[]>(`/api/frames${qs ? `?${qs}` : ""}`);
+  const frames = await apiFetch<FrameTemplate[]>(`/api/frames${qs ? `?${qs}` : ""}`);
+  return frames.map(normalizeFrameAssetUrls);
 }
 
 export async function getFrame(frameRef: string) {
-  return apiFetch<FrameTemplate>(`/api/frames/${frameRef}`);
+  const frame = await apiFetch<FrameTemplate>(`/api/frames/${frameRef}`);
+  return normalizeFrameAssetUrls(frame);
 }
 
 export async function authMe() {

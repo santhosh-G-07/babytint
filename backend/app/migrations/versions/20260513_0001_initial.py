@@ -28,17 +28,17 @@ def upgrade() -> None:
     op.create_table(
         "users",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("supabase_uid", sa.String(length=128), nullable=False),
+        sa.Column("auth_uid", sa.String(length=128), nullable=False),
         sa.Column("email", sa.String(length=320), nullable=False),
         sa.Column("name", sa.String(length=120), nullable=True),
         sa.Column("role", user_role, nullable=False, server_default="customer"),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_users")),
         sa.UniqueConstraint("email", name=op.f("uq_users_email")),
-        sa.UniqueConstraint("supabase_uid", name=op.f("uq_users_supabase_uid")),
+        sa.UniqueConstraint("auth_uid", name=op.f("uq_users_auth_uid")),
     )
     op.create_index(op.f("ix_users_email"), "users", ["email"], unique=False)
-    op.create_index(op.f("ix_users_supabase_uid"), "users", ["supabase_uid"], unique=False)
+    op.create_index(op.f("ix_users_auth_uid"), "users", ["auth_uid"], unique=False)
 
     op.create_table(
         "frames",
@@ -129,10 +129,9 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_frames_slug"), table_name="frames")
     op.drop_table("frames")
 
-    op.drop_index(op.f("ix_users_supabase_uid"), table_name="users")
+    op.drop_index(op.f("ix_users_auth_uid"), table_name="users")
     op.drop_index(op.f("ix_users_email"), table_name="users")
     op.drop_table("users")
 
     sa.Enum(name="order_status").drop(op.get_bind(), checkfirst=True)
     sa.Enum(name="user_role").drop(op.get_bind(), checkfirst=True)
-

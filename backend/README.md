@@ -45,11 +45,11 @@ This backend includes `railway.toml` for Railway deployment.
    - `RAZORPAY_KEY_ID=<key>`
    - `RAZORPAY_KEY_SECRET=<secret>`
    - `RAZORPAY_WEBHOOK_SECRET=<secret>`
-   - Optional Supabase keys if you use Supabase auth/storage.
-   - Optional for testing without Supabase storage:
-     - `ALLOW_LOCAL_STORAGE_FALLBACK=true`
-     - `LOCAL_STORAGE_ROOT=/data/local_storage`
-     - `PUBLIC_BASE_URL=https://<your-backend-domain>`
+   - `ALLOW_LOCAL_STORAGE_FALLBACK=true`
+   - `LOCAL_STORAGE_ROOT=/data/local_storage`
+   - `PUBLIC_BASE_URL=https://<your-backend-domain>`
 5. Keep backend replicas at `1` when using SQLite.
+6. In Razorpay, set the webhook URL to either `https://<your-backend-domain>/api/payment/webhook`
+   or the frontend proxy `https://<your-frontend-domain>/api/razorpay/webhook`.
 
 Without a volume, SQLite data and local fallback uploads will be lost on redeploy/restart.

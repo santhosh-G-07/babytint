@@ -5,10 +5,8 @@ import hashlib
 import hmac
 import json
 import secrets
-from typing import Any
 import uuid
 
-import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
@@ -138,14 +136,6 @@ def authenticate_local_session_token(token: str, db: Session) -> AuthUser | None
     )
 
 
-def _is_supabase_auth_configured() -> bool:
-    return bool(
-        settings.supabase_url
-        and settings.supabase_service_key
-        and settings.supabase_url.startswith(("http://", "https://")),
-    )
-
-
 def _is_local_admin_configured() -> bool:
     return bool(settings.admin_login_email.strip() and settings.admin_login_password)
 
@@ -167,7 +157,7 @@ def _ensure_local_admin_user(db: Session) -> User:
     if user is None:
         local_uid = f"local-admin:{hashlib.sha256(email.encode('utf-8')).hexdigest()[:16]}"
         user = User(
-            supabase_uid=local_uid,
+            auth_uid=local_uid,
             email=email,
             name="Local Admin",
             role=UserRole.admin,
@@ -237,41 +227,6 @@ def authenticate_local_admin_token(token: str, db: Session) -> AuthUser | None:
     )
 
 
-async def _fetch_supabase_user(token: str) -> dict[str, Any]:
-    if not _is_supabase_auth_configured():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication provider is not configured on backend.",
-        )
-
-    url = f"{settings.supabase_url.rstrip('/')}/auth/v1/user"
-    headers = {
-        "apikey": settings.supabase_service_key,
-        "Authorization": f"Bearer {token}",
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.get(url, headers=headers)
-    except httpx.RequestError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service is unavailable. Try again later.",
-        ) from exc
-
-    if response.status_code != 200:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired authentication token.",
-        )
-    return response.json()
-
-
-def _first_non_empty_name(payload: dict[str, Any]) -> str | None:
-    user_meta = payload.get("user_metadata") or {}
-    return user_meta.get("name") or user_meta.get("full_name")
-
-
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
@@ -291,47 +246,9 @@ async def get_current_user(
     if local_admin is not None:
         return local_admin
 
-    payload = await _fetch_supabase_user(token)
-
-    supabase_uid = payload.get("id")
-    email = payload.get("email")
-
-    if not supabase_uid or not email:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Malformed Supabase auth payload.",
-        )
-
-    user = db.scalar(select(User).where(User.supabase_uid == str(supabase_uid)))
-    if user is None:
-        user = User(
-            supabase_uid=str(supabase_uid),
-            email=str(email),
-            name=_first_non_empty_name(payload),
-            role=UserRole.customer,
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    else:
-        update_needed = False
-        new_name = _first_non_empty_name(payload)
-        if user.email != email:
-            user.email = email
-            update_needed = True
-        if new_name and user.name != new_name:
-            user.name = new_name
-            update_needed = True
-        if update_needed:
-            db.commit()
-            db.refresh(user)
-
-    return AuthUser(
-        id=str(user.id),
-        email=user.email,
-        name=user.name,
-        role=user.role.value,
-        access_token=token,
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired authentication token.",
     )
 
 

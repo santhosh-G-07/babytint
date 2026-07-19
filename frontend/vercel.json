@@ -2,11 +2,5 @@
   "framework": "nextjs",
   "regions": ["bom1"],
   "buildCommand": "npm run build",
-  "installCommand": "npm install",
-  "crons": [
-    {
-      "path": "/api/cron/supabase-warm",
-      "schedule": "0 5 * * *"
-    }
-  ]
+  "installCommand": "npm install"
 }

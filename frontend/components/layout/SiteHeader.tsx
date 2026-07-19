@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/sheet";
 import { authMe } from "@/lib/api";
 import { clearAdminToken, hasAdminToken } from "@/lib/local-admin-auth";
-import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import type { AuthProfile } from "@/types";
 
@@ -48,8 +47,7 @@ export function SiteHeader() {
     let active = true;
     const load = async () => {
       try {
-        const { data } = await supabase.auth.getSession();
-        if (!data.session && !hasAdminToken()) {
+        if (!hasAdminToken()) {
           if (active) {
             setProfile(null);
           }
@@ -70,13 +68,9 @@ export function SiteHeader() {
       }
     };
     void load();
-    const { data: listener } = supabase.auth.onAuthStateChange(() => {
-      void load();
-    });
     window.addEventListener("babytint-auth-change", load);
     return () => {
       active = false;
-      listener.subscription.unsubscribe();
       window.removeEventListener("babytint-auth-change", load);
     };
   }, []);
@@ -119,8 +113,7 @@ export function SiteHeader() {
       <Button
         variant="outline"
         className="rounded-xl border-[#232323] bg-[#1f1f1f] text-white hover:bg-[#333333] hover:text-white"
-        onClick={async () => {
-          await supabase.auth.signOut();
+        onClick={() => {
           clearAdminToken();
           setProfile(null);
         }}
@@ -158,8 +151,7 @@ export function SiteHeader() {
       <Button
         variant="secondary"
         className="w-full justify-start border border-[#232323] bg-[#1f1f1f] text-white hover:bg-[#333333]"
-        onClick={async () => {
-          await supabase.auth.signOut();
+        onClick={() => {
           clearAdminToken();
           setProfile(null);
         }}

@@ -12,7 +12,6 @@ import {
 } from "@/lib/api";
 import { hasAuthToken } from "@/lib/local-admin-auth";
 import { cartSyncKey, useCartStore } from "@/lib/store";
-import { supabase } from "@/lib/supabase";
 import { cartItemPrice } from "@/lib/utils";
 import type { CustomizationData } from "@/types";
 
@@ -127,10 +126,8 @@ export function CartSync() {
         return;
       }
 
-      const { data } = await supabase.auth.getSession();
-      const session = data.session;
       const localAuth = hasAuthToken();
-      if (!session && !localAuth) {
+      if (!localAuth) {
         hydratedForSessionRef.current = null;
         lastSyncedSignatureRef.current = "";
         return;
@@ -138,14 +135,14 @@ export function CartSync() {
 
       const localSignature = syncSignature();
       if (
-        hydratedForSessionRef.current === (session?.user.id ?? "local") &&
+        hydratedForSessionRef.current === "local" &&
         lastSyncedSignatureRef.current === localSignature
       ) {
         return;
       }
 
       syncBusyRef.current = true;
-      const authKey = session?.user.id ?? "local";
+      const authKey = "local";
       try {
         const serverItems = await listServerCart();
         await removeServerItemsForDeletedKeys(
@@ -155,7 +152,7 @@ export function CartSync() {
 
         // One-time hydration per authenticated session:
         // if server has items absent in local cart, pull them into local.
-        if (hydratedForSessionRef.current !== (session?.user.id ?? "local")) {
+        if (hydratedForSessionRef.current !== "local") {
           const localKeys = new Set(useCartStore.getState().cart.map(localKey));
           const removedKeys = new Set(useCartStore.getState().removedCartItems.map((item) => item.key));
           const serverAfterRemovals = await listServerCart();
@@ -251,7 +248,7 @@ export function CartSync() {
           }
         }
 
-        hydratedForSessionRef.current = session?.user.id ?? "local";
+        hydratedForSessionRef.current = "local";
         lastSyncedSignatureRef.current = syncSignature();
       } catch (error) {
         if (error instanceof ApiError) {
@@ -272,15 +269,16 @@ export function CartSync() {
     };
 
     void sync();
-    const { data: listener } = supabase.auth.onAuthStateChange(() => {
+    const handleAuthChange = () => {
       hydratedForSessionRef.current = null;
       lastSyncedSignatureRef.current = "";
       void sync();
-    });
+    };
+    window.addEventListener("babytint-auth-change", handleAuthChange);
 
     return () => {
       active = false;
-      listener.subscription.unsubscribe();
+      window.removeEventListener("babytint-auth-change", handleAuthChange);
     };
   }, [cart, removedCartItems]);
 

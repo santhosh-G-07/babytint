@@ -108,7 +108,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> LocalAu
         raise HTTPException(status_code=409, detail="An account already exists for this email.")
 
     user = User(
-        supabase_uid=_local_uid_for_email(email),
+        auth_uid=_local_uid_for_email(email),
         email=email,
         name=payload.name.strip(),
         password_hash=hash_password(payload.password),

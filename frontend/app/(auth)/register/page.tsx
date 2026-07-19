@@ -11,12 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { registerLocal } from "@/lib/api";
 import { setAuthToken } from "@/lib/local-admin-auth";
-import { assertSupabaseReachable, isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 export default function RegisterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -35,32 +33,6 @@ export default function RegisterPage() {
       toast.error(error instanceof Error ? error.message : "Could not create account.");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const signInWithGoogle = async () => {
-    if (googleLoading) {
-      return;
-    }
-    if (!isSupabaseConfigured) {
-      toast.error("Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and a publishable key.");
-      return;
-    }
-
-    setGoogleLoading(true);
-    try {
-      await assertSupabaseReachable();
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: `${window.location.origin}/orders` },
-      });
-      if (error) {
-        toast.error(error.message);
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not reach Supabase.");
-    } finally {
-      setGoogleLoading(false);
     }
   };
 
@@ -87,10 +59,6 @@ export default function RegisterPage() {
             {loading ? "Creating..." : "Create account"}
           </Button>
         </form>
-
-        <Button variant="outline" className="mt-3 w-full" onClick={signInWithGoogle} disabled={googleLoading}>
-          {googleLoading ? "Checking Google login..." : "Continue with Google"}
-        </Button>
 
         <p className="mt-4 text-center text-sm text-stone-500 dark:text-stone-400">
           Already registered?{" "}

@@ -21,16 +21,14 @@ class Settings(BaseSettings):
         alias="CORS_ORIGINS",
     )
 
-    supabase_url: str = Field(alias="SUPABASE_URL")
-    supabase_service_key: str = Field(alias="SUPABASE_SERVICE_KEY")
     admin_login_email: str = Field(default="", alias="ADMIN_LOGIN_EMAIL")
     admin_login_password: str = Field(default="", alias="ADMIN_LOGIN_PASSWORD")
     admin_token_salt: str = Field(default="babytint-admin-local", alias="ADMIN_TOKEN_SALT")
 
     database_url: str = Field(alias="DATABASE_URL")
 
-    razorpay_key_id: str = Field(alias="RAZORPAY_KEY_ID")
-    razorpay_key_secret: str = Field(alias="RAZORPAY_KEY_SECRET")
+    razorpay_key_id: str = Field(default="", alias="RAZORPAY_KEY_ID")
+    razorpay_key_secret: str = Field(default="", alias="RAZORPAY_KEY_SECRET")
     razorpay_webhook_secret: str = Field(default="", alias="RAZORPAY_WEBHOOK_SECRET")
     delhivery_api_token: str = Field(default="", alias="DELHIVERY_API_TOKEN")
     delhivery_mode: str = Field(default="production", alias="DELHIVERY_MODE")

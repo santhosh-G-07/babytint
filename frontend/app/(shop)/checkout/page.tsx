@@ -21,7 +21,6 @@ import {
   verifyRazorpayPayment,
 } from "@/lib/api";
 import { cartSyncKey, useCartStore } from "@/lib/store";
-import { supabase } from "@/lib/supabase";
 import { inr, isAssistedCustomization } from "@/lib/utils";
 import type { LocalCartItem, OrderRecord } from "@/types";
 
@@ -211,14 +210,11 @@ export default function CheckoutPage() {
     setPaying(true);
     let modalOpened = false;
     try {
-      const { data } = await supabase.auth.getSession();
-      let userEmail = data.session?.user.email ?? "";
-      if (!userEmail) {
-        try {
-          userEmail = (await authMe()).email;
-        } catch {
-          userEmail = "";
-        }
+      let userEmail = "";
+      try {
+        userEmail = (await authMe()).email;
+      } catch {
+        userEmail = "";
       }
 
       let order = paymentOrder;

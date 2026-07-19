@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { addServerCartItem } from "@/lib/api";
 import { hasAuthToken } from "@/lib/local-admin-auth";
 import { useCartStore } from "@/lib/store";
-import { supabase } from "@/lib/supabase";
 import { cartItemPrice, inr } from "@/lib/utils";
 import type { CustomizationData, FrameTemplate } from "@/types";
 
@@ -36,8 +35,7 @@ export function AssistedCustomizationButton({ frame }: { frame: FrameTemplate })
     setBusy(true);
     try {
       let serverCartItemId: string | undefined;
-      const { data } = await supabase.auth.getSession();
-      if (data.session || hasAuthToken()) {
+      if (hasAuthToken()) {
         try {
           const created = await addServerCartItem({
             frame_id: frame.id,

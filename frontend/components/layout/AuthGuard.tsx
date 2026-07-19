@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 
 import { authMe } from "@/lib/api";
 import { hasAuthToken } from "@/lib/local-admin-auth";
-import { supabase } from "@/lib/supabase";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -16,36 +15,36 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let active = true;
     const run = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session && hasAuthToken()) {
-        try {
-          await authMe();
-          if (active) {
-            setAuthed(true);
-            setLoading(false);
-          }
-          return;
-        } catch {
+      try {
+        if (!hasAuthToken()) {
           if (active) {
             setAuthed(false);
-            setLoading(false);
           }
           return;
         }
-      }
-      if (active) {
-        setAuthed(Boolean(data.session));
-        setLoading(false);
+        await authMe();
+        if (active) {
+          setAuthed(true);
+        }
+      } catch {
+        if (active) {
+          setAuthed(false);
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
       }
     };
     void run();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuthed(Boolean(session));
-    });
+    const handleAuthChange = () => {
+      void run();
+    };
+    window.addEventListener("babytint-auth-change", handleAuthChange);
     return () => {
       active = false;
-      listener.subscription.unsubscribe();
+      window.removeEventListener("babytint-auth-change", handleAuthChange);
     };
   }, []);
 
