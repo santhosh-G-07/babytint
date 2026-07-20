@@ -1,0 +1,48 @@
+# BabyTint Frontend
+
+Next.js App Router frontend for BabyTint Photography.
+
+## Scripts
+
+```bash
+npm install
+npm run dev
+npm run lint
+npm run build
+```
+
+## Required Env (`.env.local`)
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_RAZORPAY_KEY_ID=
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+```
+
+## Key Routes
+
+- `/` homepage
+- `/shop` listing
+- `/shop/[id]` frame detail
+- `/editor/[id]` Konva customization editor
+- `/cart`, `/checkout`, `/orders`
+- `/login`, `/register`
+- `/admin`, `/admin/frames`, `/admin/orders`, `/admin/settings`
+- `/api/razorpay/webhook` webhook proxy route
+
+## Deploy Frontend
+
+Recommended: Vercel
+
+1. Import this repo in Vercel.
+2. Set root directory to `frontend`.
+3. Add env variables:
+   - `NEXT_PUBLIC_API_URL=https://<your-railway-backend-domain>`
+   - `NEXT_PUBLIC_SITE_URL=https://<your-frontend-domain>`
+   - `NEXT_PUBLIC_RAZORPAY_KEY_ID=<key>`
+4. Deploy.
+
+SEO files included:
+- `app/robots.ts`
+- `app/sitemap.ts`
+- global metadata in `app/layout.tsx`

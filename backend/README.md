@@ -1,0 +1,55 @@
+# BabyTint Backend
+
+FastAPI backend for BabyTint Photography.
+
+## Setup
+
+```bash
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+The local SQLite database is created and upgraded by the application bootstrap at startup. Do not run
+`alembic upgrade head` against an existing bootstrap-created SQLite database.
+
+For a fresh database managed entirely by Alembic, run `alembic upgrade head` before starting Uvicorn.
+
+## Env (`.env`)
+
+Use `.env.example` as template.
+
+## API Groups
+
+- `/api/auth` current user
+- `/api/frames` frame listing + admin CRUD
+- `/api/orders` checkout, customer orders, admin status updates, cart
+- `/api/upload` user uploads + admin frame uploads
+- `/api/payment` razorpay order + webhook
+- `/api/admin` dashboard metrics
+
+## Deploy On Railway
+
+This backend includes `railway.toml` for Railway deployment.
+
+1. Create a Railway service from this repo.
+2. Set the service root directory to `backend`.
+3. Attach a Railway Volume and mount it at `/data`.
+4. Add environment variables:
+   - `APP_ENV=production`
+   - `APP_HOST=0.0.0.0`
+   - `DATABASE_URL=sqlite:////data/babytint.db`
+   - `CORS_ORIGINS=https://<your-frontend-domain>`
+   - `ADMIN_LOGIN_EMAIL=<your-admin-email>`
+   - `ADMIN_LOGIN_PASSWORD=<strong-password>`
+   - `ADMIN_TOKEN_SALT=<random-long-secret>`
+   - `RAZORPAY_KEY_ID=<key>`
+   - `RAZORPAY_KEY_SECRET=<secret>`
+   - `RAZORPAY_WEBHOOK_SECRET=<secret>`
+   - `ALLOW_LOCAL_STORAGE_FALLBACK=true`
+   - `LOCAL_STORAGE_ROOT=/data/local_storage`
+   - `PUBLIC_BASE_URL=https://<your-backend-domain>`
+5. Keep backend replicas at `1` when using SQLite.
+6. In Razorpay, set the webhook URL to either `https://<your-backend-domain>/api/payment/webhook`
+   or the frontend proxy `https://<your-frontend-domain>/api/razorpay/webhook`.
+
+Without a volume, SQLite data and local fallback uploads will be lost on redeploy/restart.

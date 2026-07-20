@@ -1,0 +1,13 @@
+{
+  "name": "babytint-workspace",
+  "private": true,
+  "scripts": {
+    "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev.ps1",
+    "dev:install": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev.ps1 -Install",
+    "prod": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\prod.ps1",
+    "prod:install": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\prod.ps1 -Install",
+    "dev:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\stop-dev.ps1",
+    "dev:status": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\status-dev.ps1",
+    "api:check": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\check-api.ps1"
+  }
+}

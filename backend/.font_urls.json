@@ -1,0 +1,39 @@
+﻿{
+    "Dancing Script":  [
+                           "400=https://fonts.gstatic.com/s/dancingscript/v29/If2cXTr6YS-zF4S-kcSWSVi_sxjsohD9F50Ruu7BMSo3Sup5hNP6pg.ttf",
+                           "700=https://fonts.gstatic.com/s/dancingscript/v29/If2cXTr6YS-zF4S-kcSWSVi_sxjsohD9F50Ruu7B1i03Sup5hNP6pg.ttf"
+                       ],
+    "Montserrat":  [
+                       "400=https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCtr6Hw5aX9-obK4.ttf",
+                       "600=https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCu173w5aX9-obK4.ttf",
+                       "700=https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCuM73w5aX9-obK4.ttf"
+                   ],
+    "Baloo 2":  [
+                    "400=https://fonts.gstatic.com/s/baloo2/v23/wXK0E3kTposypRydzVT08TS3JnAmtdgazZpo_lKP7ncM.ttf",
+                    "600=https://fonts.gstatic.com/s/baloo2/v23/wXK0E3kTposypRydzVT08TS3JnAmtdjEyppo_lKP7ncM.ttf",
+                    "700=https://fonts.gstatic.com/s/baloo2/v23/wXK0E3kTposypRydzVT08TS3JnAmtdj9yppo_lKP7ncM.ttf"
+                ],
+    "Pacifico":  [
+                     "400=https://fonts.gstatic.com/s/pacifico/v23/FwZY7-Qmy14u9lezJ-6H6MyBp0u-.ttf"
+                 ],
+    "Caveat":  [
+                   "400=https://fonts.gstatic.com/s/caveat/v23/WnznHAc5bAfYB2QRah7pcpNvOx-pjfJ9eIWpZD5Mmgo.ttf",
+                   "700=https://fonts.gstatic.com/s/caveat/v23/WnznHAc5bAfYB2QRah7pcpNvOx-pjRV6eIWpZD5Mmgo.ttf"
+               ],
+    "Yellowtail":  [
+                       "400=https://fonts.gstatic.com/s/yellowtail/v25/OZpGg_pnoDtINPfRIlLohlvHxGL9f4k.ttf"
+                   ],
+    "Quicksand":  [
+                      "400=https://fonts.gstatic.com/s/quicksand/v37/6xK-dSZaM9iE8KbpRA_LJ3z8mH9BOJvgkP8o58a-xzw3UD0.ttf",
+                      "600=https://fonts.gstatic.com/s/quicksand/v37/6xK-dSZaM9iE8KbpRA_LJ3z8mH9BOJvgkCEv58a-xzw3UD0.ttf",
+                      "700=https://fonts.gstatic.com/s/quicksand/v37/6xK-dSZaM9iE8KbpRA_LJ3z8mH9BOJvgkBgv58a-xzw3UD0.ttf"
+                  ],
+    "Playfair Display":  [
+                             "400=https://fonts.gstatic.com/s/playfairdisplay/v40/nuFvD-vYSZviVYUb_rj3ij__anPXJzDwcbmjWBN2PKdFvXDXbtbK_l2q.ttf",
+                             "700=https://fonts.gstatic.com/s/playfairdisplay/v40/nuFvD-vYSZviVYUb_rj3ij__anPXJzDwcbmjWBN2PKeiunDXbtbK_l2q.ttf"
+                         ],
+    "Fredoka":  [
+                    "400=https://fonts.gstatic.com/s/fredoka/v17/X7nP4b87HvSqjb_WIi2yDCRwoQ_k7367_B-i2yQag0-mac3O8SL8EemPttpNbg.ttf",
+                    "600=https://fonts.gstatic.com/s/fredoka/v17/X7nP4b87HvSqjb_WIi2yDCRwoQ_k7367_B-i2yQag0-mac3OLyX8EemPttpNbg.ttf"
+                ]
+}

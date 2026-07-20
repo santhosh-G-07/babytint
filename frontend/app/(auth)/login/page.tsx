@@ -1,0 +1,101 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { adminLogin, loginLocal } from "@/lib/api";
+import { setAuthToken } from "@/lib/local-admin-auth";
+
+export const dynamic = "force-dynamic";
+
+export default function LoginPage() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  const nextPath = () => {
+    if (typeof window === "undefined") {
+      return "/orders";
+    }
+    const params = new URLSearchParams(window.location.search);
+    return params.get("next") ?? "/orders";
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("reason") === "session_expired") {
+      toast.message("Your session expired. Please log in again to continue.");
+    }
+  }, []);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("email") ?? "");
+    const password = String(formData.get("password") ?? "");
+
+    setLoading(true);
+    try {
+      const local = await loginLocal({ email, password });
+      setAuthToken(local.access_token);
+      toast.success("Logged in successfully.");
+      router.push(local.role === "admin" ? "/admin" : nextPath());
+    } catch {
+      try {
+        const admin = await adminLogin({ email, password });
+        setAuthToken(admin.access_token);
+        toast.success("Admin login successful.");
+        router.push("/admin");
+      } catch (adminErr) {
+        const adminMessage =
+          adminErr instanceof Error && adminErr.message
+            ? adminErr.message
+            : "Invalid credentials.";
+        toast.error(adminMessage);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Login</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <div className="space-y-1.5">
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" name="email" type="email" required />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="password">Password</Label>
+            <Input id="password" name="password" type="password" required />
+          </div>
+          <Button className="w-full" type="submit" disabled={loading}>
+            {loading ? "Logging in..." : "Login"}
+          </Button>
+        </form>
+
+        <p className="mt-3 text-center text-sm">
+          <Link href="/forgot-password" className="font-medium text-amber-700">
+            Forgot password?
+          </Link>
+        </p>
+
+        <p className="mt-4 text-center text-sm text-stone-500 dark:text-stone-400">
+          New to BabyTint?{" "}
+          <Link href="/register" className="font-medium text-amber-700">
+            Create account
+          </Link>
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
